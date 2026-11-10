@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
 	OrganizationOwnerInvitationDeliveryStatus,
 	OrganizationOwnerInvitationStatus,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 
 export class OwnerInvitationResponseDto {
 	@ApiProperty({ format: 'uuid' })
