@@ -1,17 +1,12 @@
 # Error Handling
 
-## Standards
+Return RFC 9457 Problem Details as `application/problem+json`: `type`, `title`, `status`, `detail`,
+`code`, `requestId`, and optional bounded `errors` containing approved field/code/message entries.
+Use the catalog in `src/common/errors/api-error-code.ts`; public text never comes from exceptions.
+Do not add timestamps, request paths, rejected values, provider metadata or raw validation objects to
+responses. Preserve meaningful 4xx/5xx statuses. Domain context controls identity-sensitive conflicts.
 
-Return a stable machine code, safe message, request ID, timestamp, path, and allowlisted field errors.
-Differentiate 400, 401, 403, 404, 409, 429, and infrastructure failures. Centralize translation, retain
-safe internal causes, and roll back failed operations. Let domain context decide database error mapping.
-
-## Forbidden practices
-
-No stack traces, SQL/Prisma/provider secrets, raw exception objects, blanket try/catch, swallowed
-errors, misleading 200 responses, or infinite retries.
-
-## Example and checklist
-
-Return `VALIDATION_FAILED` with field details; log the internal cause by request ID. Review status,
-code stability, disclosure, retryability, logging, and tests.
+Retain causes internally, but log only reviewed diagnostic codes and server correlation IDs through
+the sanitized logger. No stacks, SQL, connection strings, credentials, arbitrary payloads or raw
+exception messages in ordinary logs. Roll back failed operations; never disguise failures as 200.
+See `docs/api/error-contract.md` for the client contract and compatibility policy.
