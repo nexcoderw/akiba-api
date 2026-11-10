@@ -1,7 +1,7 @@
 import { Transform } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { OrganizationOwnerInvitationStatus } from '@nexcoderw/gym-db';
+import { OrganizationOwnerInvitationStatus } from '@nexcoderw/akiba-db';
 
 export class ListOwnerInvitationsQueryDto {
 	@ApiPropertyOptional({ default: 20, minimum: 1, maximum: 50 })
