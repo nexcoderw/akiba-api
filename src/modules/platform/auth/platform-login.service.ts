@@ -1,3 +1,5 @@
+import { normalizeEmailIdentity } from '../../../common/identity/email-identity.js';
+import { accountCanAuthenticate } from '../../../common/identity/account-state.policy.js';
 import {
 	Injectable,
 	Logger,
@@ -6,7 +8,7 @@ import {
 	UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PlatformStaffStatus, Prisma, PrismaService, UserStatus } from '@nexcoderw/akiba-db';
+import { PlatformStaffStatus, Prisma, PrismaService } from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
 import type { PlatformMfaChallengeResponseDto } from './dto/platform-auth-response.dto.js';
@@ -41,23 +43,30 @@ export class PlatformLoginService {
 		ipAddress: string,
 		now = new Date(),
 	): Promise<PlatformMfaChallengeResponseDto> {
-		this.attempts.assertAllowed(ipAddress, input.email, now.getTime());
+		const email = normalizeEmailIdentity(input.email);
+		if (email === null) throw new UnauthorizedException(PLATFORM_AUTH_ERROR.invalidCredentials);
+		this.attempts.assertAllowed(ipAddress, email, now.getTime());
 		let identity: Awaited<ReturnType<typeof this.readIdentity>>;
 		try {
-			identity = await this.readIdentity(input.email);
+			identity = await this.readIdentity(email);
 		} catch (error: unknown) {
 			throw this.persistenceFailure(error);
 		}
 
 		const passwordHash = identity?.passwordCredential?.passwordHash ?? this.passwords.dummyHash;
-		const passwordValid = await this.passwords.verify(passwordHash, input.password);
+		const passwordValid = await this.passwords.verify(
+			passwordHash,
+			input.password,
+			identity?.passwordCredential?.normalization ?? 'raw',
+		);
 		if (
 			!passwordValid ||
-			identity?.status !== UserStatus.ACTIVE ||
-			identity.emailVerifiedAt === null ||
+			identity === null ||
+			!accountCanAuthenticate(identity.status, identity.emailVerifiedAt) ||
+			identity.passwordCredential?.disabledAt !== null ||
 			identity.platformStaff?.status !== PlatformStaffStatus.ACTIVE
 		) {
-			this.attempts.recordFailure(ipAddress, input.email, now.getTime());
+			this.attempts.recordFailure(ipAddress, email, now.getTime());
 			this.logger.warn(JSON.stringify({ event: 'platform_login_rejected' }));
 			throw new UnauthorizedException(PLATFORM_AUTH_ERROR.invalidCredentials);
 		}
@@ -93,6 +102,8 @@ export class PlatformLoginService {
 						data: {
 							platformStaffId: platformStaff.id,
 							tokenDigest: this.tokens.digest(challengeToken),
+							// Bind MFA to the password proof's start, not a later insertion time.
+							createdAt: now,
 							expiresAt,
 							maxAttempts: this.maximumAttempts,
 						},
@@ -103,7 +114,7 @@ export class PlatformLoginService {
 		} catch (error: unknown) {
 			throw this.persistenceFailure(error);
 		}
-		this.attempts.clearAccount(input.email);
+		this.attempts.clearAccount(email);
 		this.logger.log(
 			JSON.stringify({ event: 'platform_mfa_challenge_created', staffId: platformStaff.id }),
 		);
@@ -127,7 +138,9 @@ export class PlatformLoginService {
 				id: true,
 				status: true,
 				emailVerifiedAt: true,
-				passwordCredential: { select: { passwordHash: true } },
+				passwordCredential: {
+					select: { passwordHash: true, normalization: true, disabledAt: true },
+				},
 				platformStaff: {
 					select: {
 						id: true,
