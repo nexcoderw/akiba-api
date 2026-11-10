@@ -1,11 +1,8 @@
-import { MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
-import { ApiExceptionFilter } from './common/filters/api-exception.filter.js';
-import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor.js';
-import { RequestIdMiddleware } from './common/middleware/request-id.middleware.js';
 import type { EnvironmentVariables } from './config/environment.types.js';
 import { validateEnvironment } from './config/environment.validation.js';
 import { DatabaseIntegrationModule } from './infrastructure/database/database-integration.module.js';
@@ -17,7 +14,7 @@ import { PlatformModule } from './modules/platform/platform.module.js';
 	imports: [
 		ConfigModule.forRoot({
 			cache: true,
-			envFilePath: ['.env.local', '.env'],
+			envFilePath: ['.env.local'],
 			ignoreEnvFile: process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'production',
 			isGlobal: true,
 			validate: validateEnvironment,
@@ -38,14 +35,6 @@ import { PlatformModule } from './modules/platform/platform.module.js';
 		OwnerModule,
 		PlatformModule,
 	],
-	providers: [
-		{ provide: APP_GUARD, useClass: ThrottlerGuard },
-		{ provide: APP_FILTER, useClass: ApiExceptionFilter },
-		{ provide: APP_INTERCEPTOR, useClass: RequestLoggingInterceptor },
-	],
+	providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
-export class AppModule implements NestModule {
-	configure(consumer: MiddlewareConsumer): void {
-		consumer.apply(RequestIdMiddleware).forRoutes('*');
-	}
-}
+export class AppModule {}
