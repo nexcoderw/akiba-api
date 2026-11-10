@@ -1,9 +1,11 @@
 # Database Package Consumption
 
-Consume only public exports of `@nexcoderw/akiba-db`. The verified local source is version 0.2.0 at
-`71096ae94640e8227623d700e5c2fcb9a12007fb`. Until registry availability is verified, `file:../db` is
-the supported local mechanism; keep the sibling source at the reviewed revision and build it first.
-CI checks out that immutable revision. Replace the local dependency with an exact published version
+Consume only public exports of `@nexcoderw/akiba-db`. Until registry availability is verified,
+`file:../db` is the supported local mechanism; keep the sibling source at the reviewed revision and
+generate/build it first. Identity-foundation consumers require its matching schema and migration.
+CI requires the operator-reviewed 40-character commit in AKIBA_DB_SOURCE_REVISION and fails before
+checkout if it is missing; never substitute main or an obsolete schema revision. Update that repository
+variable after committing and reviewing DB changes. Replace the local dependency with an exact published version
 only after verifying its exports and compatibility. Humans generate the npm lockfile.
 
 Register DatabaseModule once, enable shutdown hooks, preserve transaction scope and return explicit
