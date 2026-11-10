@@ -7,8 +7,9 @@ Group product modules by trust boundary, then by feature. Platform-administratio
 `src/modules/owner/<feature>/`; shared operational modules such as health may remain directly under
 `src/modules/`. Keep each feature's controller, service, DTOs, policies, and types cohesive. Put
 cross-cutting transport code in `src/common/`, environment parsing in `src/config/`, provider adapters in
-`src/infrastructure/`, and Swagger setup in `src/docs/`. Separate unit, integration, and e2e tests. Keep
-architecture, API, security, ADRs, and runbooks under `docs/`.
+`src/infrastructure/`, and Swagger setup in `src/docs/`. Separate unit, integration, and e2e tests.
+Keep essential setup in the existing README and API contracts in Swagger source; do not create a root
+documentation/report directory.
 
 ## Forbidden practices
 
