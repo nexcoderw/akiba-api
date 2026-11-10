@@ -108,7 +108,7 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 	afterAll(async () => application?.close());
 
 	it('lets an authenticated invited owner without membership accept the invitation', async () => {
-		await acceptanceRequest().expect(200).expect({
+		const response = await acceptanceRequest().expect(200).expect({
 			status: 'accepted',
 			organizationId: ORGANIZATION_ID,
 			organizationName: 'Kimihurura Supplies',
@@ -123,10 +123,11 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 				userId: '44444444-4444-4444-8444-444444444444',
 			}),
 			CHALLENGE_TOKEN,
-			undefined,
+			response.get('X-Request-Id'),
 			undefined,
 			'kimihurura',
 		);
+		expect(response.get('X-Request-Id')).toMatch(/^req_[0-9a-f-]{36}$/u);
 	});
 
 	it('rejects an unauthenticated acceptance request', async () => {
@@ -142,11 +143,11 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 	});
 
 	it("cannot accept Kimihurura Supplies's invitation from another organization subdomain", async () => {
-		await acceptanceRequest('https://diamond-supplies.akiba.com').expect(409);
+		const response = await acceptanceRequest('https://diamond-supplies.akiba.com').expect(409);
 		expect(accept).toHaveBeenCalledWith(
 			expect.any(Object),
 			CHALLENGE_TOKEN,
-			undefined,
+			response.get('X-Request-Id'),
 			undefined,
 			'diamond-supplies',
 		);
