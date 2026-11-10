@@ -7,6 +7,7 @@ import {
 	OrganizationMembershipStatus,
 	OrganizationStatus,
 	PrismaService,
+	UserStatus,
 } from '@nexcoderw/akiba-db';
 import request from 'supertest';
 
@@ -81,6 +82,8 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 	let organizations: { id: string; name: string; slug: string; status: OrganizationStatus }[];
 	let membershipStatus: OrganizationMembershipStatus;
 	let revoked: boolean;
+	let accountStatus: UserStatus;
+	let credentialDisabled: boolean;
 	let multiple: boolean;
 	let removedAfterAuthentication: boolean;
 	let systemOwner: boolean;
@@ -102,9 +105,12 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 				id: second ? USER_B : USER,
 				displayName: 'Fictional Owner',
 				email: 'owner@example.com',
-				status: 'ACTIVE',
+				status: accountStatus,
 				emailVerifiedAt: new Date('2025-01-01'),
-				passwordCredential: { passwordChangedAt: new Date('2025-01-01') },
+				passwordCredential: {
+					passwordChangedAt: new Date('2025-01-01'),
+					disabledAt: credentialDisabled ? new Date('2026-01-01') : null,
+				},
 				organizationMemberships:
 					membershipStatus === OrganizationMembershipStatus.ACTIVE
 						? organizations
@@ -233,6 +239,8 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 		];
 		membershipStatus = OrganizationMembershipStatus.ACTIVE;
 		revoked = false;
+		accountStatus = UserStatus.ACTIVE;
+		credentialDisabled = false;
 		multiple = false;
 		removedAfterAuthentication = false;
 		systemOwner = true;
@@ -258,6 +266,17 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 			expect.objectContaining({ organizationId: A, userId: USER, id: MEMBERSHIP }),
 		);
 		expect(observedScopes).toEqual([A]);
+	});
+	it.each([UserStatus.SUSPENDED, UserStatus.DISABLED])(
+		'denies global account status %s despite active membership',
+		async (status) => {
+			accountStatus = status;
+			await call().expect(401);
+		},
+	);
+	it('denies a disabled global password credential despite active membership', async () => {
+		credentialDisabled = true;
+		await call().expect(401);
 	});
 	it('denies missing credentials and platform cookies at organization routes', async () => {
 		await call().unset('Cookie').expect(401);
