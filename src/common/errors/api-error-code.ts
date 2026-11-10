@@ -6,6 +6,21 @@ export interface ProblemDefinition {
 }
 
 const core = {
+	PASSWORD_POLICY_VIOLATION: {
+		status: 400,
+		title: 'Choose a stronger password',
+		detail: 'Use at least 15 characters and avoid common or compromised passwords.',
+	},
+	PASSWORD_POLICY_UNAVAILABLE: {
+		status: 503,
+		title: 'Password setup unavailable',
+		detail: 'Password setup is temporarily unavailable. Please try again later.',
+	},
+	ACCOUNT_ACTION_UNAVAILABLE: {
+		status: 409,
+		title: 'Account action unavailable',
+		detail: 'This account action could not be completed.',
+	},
 	VALIDATION_FAILED: {
 		status: 400,
 		title: 'Please check your information',
