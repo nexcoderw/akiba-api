@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { OrganizationStatus, PrismaService } from '@nexcoderw/gym-db';
+import { OrganizationStatus, PrismaService } from '@nexcoderw/akiba-db';
 
 import { databaseErrorCode } from '../../src/common/errors/database-error-code.js';
 import { organizationFailure } from '../../src/modules/platform/organizations/platform-organization-errors.js';
@@ -108,9 +108,9 @@ describe('organization service contracts (adapter fake, not PostgreSQL)', () => 
 		},
 	);
 	it('creates pending data and appends an audit event inside the same transaction', async () => {
-		await writes.create(context, { name: 'Soho Gym', slug: 'soho' });
+		await writes.create(context, { name: 'Kimihurura Supplies', slug: 'kimihurura' });
 		expect(database.create.mock.calls[0]?.[0]).toMatchObject({
-			data: { name: 'Soho Gym', slug: 'soho', status: OrganizationStatus.PENDING },
+			data: { name: 'Kimihurura Supplies', slug: 'kimihurura', status: OrganizationStatus.PENDING },
 		});
 		expect(record).toHaveBeenCalledWith(
 			expect.anything(),
@@ -120,20 +120,24 @@ describe('organization service contracts (adapter fake, not PostgreSQL)', () => 
 				previousStatus: null,
 				resultingStatus: OrganizationStatus.PENDING,
 				previousName: null,
-				resultingName: 'Soho Gym',
+				resultingName: 'Kimihurura Supplies',
 			}),
 		);
 	});
 	it('propagates audit failure from inside the transaction without returning success', async () => {
 		record.mockRejectedValueOnce(new Error('audit provider unavailable'));
-		await expect(writes.create(context, { name: 'Soho Gym', slug: 'soho' })).rejects.toMatchObject({
+		await expect(
+			writes.create(context, { name: 'Kimihurura Supplies', slug: 'kimihurura' }),
+		).rejects.toMatchObject({
 			status: 503,
 		});
 		expect(database.runTransaction).toHaveBeenCalledTimes(1);
 	});
 	it('maps a database duplicate conflict without treating retry as success', async () => {
 		database.create.mockRejectedValueOnce({ code: 'P2002' });
-		await expect(writes.create(context, { name: 'Soho Gym', slug: 'soho' })).rejects.toMatchObject({
+		await expect(
+			writes.create(context, { name: 'Kimihurura Supplies', slug: 'kimihurura' }),
+		).rejects.toMatchObject({
 			status: 409,
 		});
 		expect(record).not.toHaveBeenCalled();
@@ -143,8 +147,8 @@ describe('organization service contracts (adapter fake, not PostgreSQL)', () => 
 			.mockResolvedValueOnce(organizationFixture())
 			.mockRejectedValueOnce({ code: 'P2002' });
 		const results = await Promise.allSettled([
-			writes.create(context, { name: 'Soho Gym', slug: 'soho' }),
-			writes.create(context, { name: 'Power Gym', slug: 'soho' }),
+			writes.create(context, { name: 'Kimihurura Supplies', slug: 'kimihurura' }),
+			writes.create(context, { name: 'Remera Trading', slug: 'kimihurura' }),
 		]);
 		expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
 		expect(results.find((result) => result.status === 'rejected')).toMatchObject({
@@ -156,26 +160,26 @@ describe('organization service contracts (adapter fake, not PostgreSQL)', () => 
 	it('requires matching timestamp and status in the conditional profile update', async () => {
 		database.findUnique.mockResolvedValueOnce(organizationFixture()).mockResolvedValueOnce({
 			...organizationFixture(),
-			name: 'Power Gym',
+			name: 'Remera Trading',
 		});
-		await writes.update(context, ORGANIZATION_ID, { name: 'Power Gym' }, ORGANIZATION_TIME);
+		await writes.update(context, ORGANIZATION_ID, { name: 'Remera Trading' }, ORGANIZATION_TIME);
 		expect(database.updateMany.mock.calls[0]?.[0]).toMatchObject({
 			where: {
 				id: ORGANIZATION_ID,
 				updatedAt: ORGANIZATION_TIME,
 				status: OrganizationStatus.PENDING,
 			},
-			data: { name: 'Power Gym' },
+			data: { name: 'Remera Trading' },
 		});
 		expect(record.mock.calls[0]?.[1]).toMatchObject({
-			previousName: 'Soho Gym',
-			resultingName: 'Power Gym',
+			previousName: 'Kimihurura Supplies',
+			resultingName: 'Remera Trading',
 			changedFields: ['name'],
 		});
 	});
 	it('rejects stale or concurrently changed rows and never appends a success audit', async () => {
 		await expect(
-			writes.update(context, ORGANIZATION_ID, { name: 'Power Gym' }, new Date(0)),
+			writes.update(context, ORGANIZATION_ID, { name: 'Remera Trading' }, new Date(0)),
 		).rejects.toMatchObject({ status: 412 });
 		database.updateMany.mockResolvedValue({ count: 0 });
 		await expect(
@@ -230,7 +234,7 @@ describe('organization service contracts (adapter fake, not PostgreSQL)', () => 
 			status: OrganizationStatus.ARCHIVED,
 		});
 		await expect(
-			writes.update(context, ORGANIZATION_ID, { name: 'Power Gym' }, ORGANIZATION_TIME),
+			writes.update(context, ORGANIZATION_ID, { name: 'Remera Trading' }, ORGANIZATION_TIME),
 		).rejects.toMatchObject({ status: 409 });
 		for (const action of ['activation', 'suspension', 'archival'] as const) {
 			await expect(
@@ -245,11 +249,13 @@ describe('organization service contracts (adapter fake, not PostgreSQL)', () => 
 		available.mockImplementation(() => {
 			unavailable.assertAvailable();
 		});
-		await expect(writes.create(context, { name: 'Soho Gym', slug: 'soho' })).rejects.toMatchObject({
+		await expect(
+			writes.create(context, { name: 'Kimihurura Supplies', slug: 'kimihurura' }),
+		).rejects.toMatchObject({
 			status: 503,
 		});
 		await expect(
-			writes.update(context, ORGANIZATION_ID, { name: 'Power Gym' }, ORGANIZATION_TIME),
+			writes.update(context, ORGANIZATION_ID, { name: 'Remera Trading' }, ORGANIZATION_TIME),
 		).rejects.toMatchObject({ status: 503 });
 		await expect(
 			writes.lifecycle(context, ORGANIZATION_ID, 'activation', ORGANIZATION_TIME),
