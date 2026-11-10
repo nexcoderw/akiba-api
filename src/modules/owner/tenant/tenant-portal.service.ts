@@ -41,12 +41,19 @@ export class TenantPortalService {
 					},
 					select: {
 						authenticatedAt: true,
-						user: { select: { passwordCredential: { select: { passwordChangedAt: true } } } },
+						user: {
+							select: {
+								passwordCredential: { select: { passwordChangedAt: true, disabledAt: true } },
+							},
+						},
 					},
 				});
 				if (session === null) throw new ApiProblemException('UNAUTHENTICATED');
 				const credential = session.user.passwordCredential;
-				if (credential === null || credential.passwordChangedAt > session.authenticatedAt) {
+				if (
+					credential?.disabledAt !== null ||
+					credential.passwordChangedAt > session.authenticatedAt
+				) {
 					throw new ApiProblemException('UNAUTHENTICATED');
 				}
 				const membership = await transaction.organizationMembership.findFirst({
