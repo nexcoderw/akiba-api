@@ -1,18 +1,18 @@
 # Testing
 
-## Standards
+Use unit tests for policies, integration tests for module/provider contracts, and e2e tests for HTTP
+behavior. Cover DTO failures, authentication/authorization, safe absence/conflicts, rate limiting,
+tenant/branch denial, revocation, dependency failures, headers and redaction where relevant.
+Prefer offline adapter fakes; keep real guards active in HTTP tests. Never load production credentials.
+Agents inspect and edit only; humans run commands and supply results.
 
-Use unit tests for policy/domain logic, integration tests for module/provider contracts, and e2e tests
-for real HTTP behavior. Every endpoint covers success, DTO failures, 401, 403, 404, 409, relevant 429,
-tenant/branch denial, permissions, entitlement, pagination, infrastructure failure, and idempotency.
-Use isolated test databases and provider fakes at adapter boundaries.
+Akiba has exactly two persistent Neon branches, development and production, using their existing
+default database and managed owner. Do not create test databases or restricted custom roles. Any live
+integration test must use the database repository's guarded development policy, synthetic fixtures,
+scoped cleanup and an exclusive maintenance window. The legacy disposable bootstrap PostgreSQL
+suite is incompatible with this policy and remains disabled pending redesign; do not enable it by
+copying its old role/database assumptions.
 
-## Forbidden practices
-
-No production credentials/data, order dependence, authorization mocked away in e2e, blanket snapshots,
-or completion claims without endpoint tests and Swagger.
-
-## Example and checklist
-
-Fictional Soho and Power Gym fixtures prove cross-tenant denial. Confirm cleanup, deterministic time,
-failure paths, response contracts, headers, and provider isolation.
+Fixtures use fictional Kimihurura Supplies and Remera Trading organizations. Test missing, revoked and
+cross-organization memberships without bypassing authorization. No order dependence, blanket
+snapshots, production data, or passing-test claims without actual human output.
