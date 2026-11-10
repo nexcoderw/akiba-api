@@ -1,6 +1,8 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { PrismaService } from '@nexcoderw/akiba-db';
 
+import { DatabaseIntegrationModule } from '../../src/infrastructure/database/database-integration.module.js';
+import { OfflineDatabaseModule } from '../fixtures/offline-database.module.js';
 import { AppModule } from '../../src/app.module.js';
 import {
 	DurableOwnerInvitationAudit,
@@ -24,6 +26,8 @@ describe('owner onboarding module integration (adapter fake; no live PostgreSQL)
 
 	beforeAll(async () => {
 		module = await Test.createTestingModule({ imports: [AppModule] })
+			.overrideModule(DatabaseIntegrationModule)
+			.useModule(OfflineDatabaseModule)
 			.overrideProvider(PrismaService)
 			.useValue(database.prisma)
 			.compile();
