@@ -27,13 +27,16 @@ const REQUIRED: Readonly<Record<Exclude<RouteAccess, 'public'>, readonly object[
 export class RouteAccessGuard implements CanActivate {
 	constructor(private readonly reflector: Reflector) {}
 	canActivate(context: ExecutionContext): boolean {
-		const access = this.reflector.getAllAndOverride<RouteAccess | undefined>(ROUTE_ACCESS,
-			[context.getHandler(), context.getClass()]);
+		const access = this.reflector.getAllAndOverride<RouteAccess | undefined>(ROUTE_ACCESS, [
+			context.getHandler(),
+			context.getClass(),
+		]);
 		if (access === 'public') return true;
-		if (access === undefined || !Object.hasOwn(REQUIRED, access)) throw new ApiProblemException('ACCESS_DENIED');
+		if (access === undefined || !Object.hasOwn(REQUIRED, access))
+			throw new ApiProblemException('ACCESS_DENIED');
 		const guards: unknown[] = [
-			...(this.reflector.get<unknown[]>(GUARDS_METADATA, context.getClass()) ?? []),
-			...(this.reflector.get<unknown[]>(GUARDS_METADATA, context.getHandler()) ?? []),
+			...(this.reflector.get<unknown[] | undefined>(GUARDS_METADATA, context.getClass()) ?? []),
+			...(this.reflector.get<unknown[] | undefined>(GUARDS_METADATA, context.getHandler()) ?? []),
 		];
 		if (!REQUIRED[access].every((guard) => guards.includes(guard))) {
 			throw new ApiProblemException('ACCESS_DENIED');
