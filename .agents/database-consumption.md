@@ -1,18 +1,17 @@
 # Database Package Consumption
 
-## Standards
+Consume only public exports of `@nexcoderw/akiba-db`. The verified local source is version 0.2.0 at
+`71096ae94640e8227623d700e5c2fcb9a12007fb`. Until registry availability is verified, `file:../db` is
+the supported local mechanism; keep the sibling source at the reviewed revision and build it first.
+CI checks out that immutable revision. Replace the local dependency with an exact published version
+only after verifying its exports and compatibility. Humans generate the npm lockfile.
 
-Consume only explicit public exports from an immutable `@nexcoderw/gym-db` version. Register its
-documented Nest module once, enable shutdown hooks, preserve tenant transactions, and translate
-database results into API DTOs. Request schema changes in `gym-db` and deploy them in its documented
-compatibility order.
+Register DatabaseModule once, enable shutdown hooks, preserve transaction scope and return explicit
+API DTOs. Schema, generated client and migrations belong exclusively to akiba-db. No private paths,
+API-owned Prisma generators, startup migrations, duplicate pools or fabricated exports.
 
-## Forbidden practices
-
-No Prisma schema, migrations, generators, local Prisma client, private package paths, duplicate
-connections, startup migrations, `db push`, or fabricated exports.
-
-## Example and checklist
-
-After `gym-db@0.2.0` exposes Organization, install that exact version and use its public API. Confirm
-version, exported contract, tenant context, error mapping, lifecycle, and rollout prerequisite.
+TenantTransactionService validates identifier shape and sets transaction-local context; it does not
+authorize users or constrain unrestricted queries. Every tenant query requires trusted membership and
+an organization predicate. Owner credentials can bypass RLS, and the current package has no RLS
+policies. Passing owner-based tests does not prove tenant isolation. Request necessary schema/security
+changes separately in akiba-db and follow its guarded development/production deployment policy.
