@@ -1,5 +1,5 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { OrganizationStatus, Prisma, PrismaService } from '@nexcoderw/gym-db';
+import { OrganizationStatus, Prisma, PrismaService } from '@nexcoderw/akiba-db';
 
 import type { CreateOrganizationDto } from './dto/create-organization.dto.js';
 import type { UpdateOrganizationDto } from './dto/update-organization.dto.js';
