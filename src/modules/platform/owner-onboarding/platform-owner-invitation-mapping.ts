@@ -1,4 +1,4 @@
-import type { OrganizationOwnerInvitation, Prisma } from '@nexcoderw/gym-db';
+import type { OrganizationOwnerInvitation, Prisma } from '@nexcoderw/akiba-db';
 
 import type { OwnerInvitationResponseDto } from './dto/owner-invitation-response.dto.js';
 
