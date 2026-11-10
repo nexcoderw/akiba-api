@@ -42,22 +42,19 @@ export class PlatformOwnerBootstrapService {
 
 	getTarget(): PlatformBootstrapTarget {
 		this.assertEnabled();
-		const databaseHost = this.config.get('PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_HOST', {
-			infer: true,
-		});
-		const databaseName = this.config.get('PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_NAME', {
-			infer: true,
-		});
-		if (databaseHost === null || databaseName === null) {
+		const databaseUrl = this.config.get('DATABASE_URL', { infer: true });
+		if (databaseUrl === null) {
 			throw new PlatformBootstrapError(
 				'BOOTSTRAP_DISABLED',
-				'The approved bootstrap database target is unavailable.',
+				'Bootstrap requires a configured development or production connection.',
 			);
 		}
+		const target = new URL(databaseUrl);
 		return {
 			environment: this.config.get('NODE_ENV', { infer: true }),
-			databaseHost,
-			databaseName,
+			databaseHost: target.hostname,
+			databaseName: decodeURIComponent(target.pathname.slice(1)),
+			databaseRole: decodeURIComponent(target.username),
 		};
 	}
 
@@ -282,22 +279,9 @@ export class PlatformOwnerBootstrapService {
 
 	private async verifyDatabase(transaction: Prisma.TransactionClient): Promise<void> {
 		const target = this.getTarget();
-		const databaseRole = this.config.get('PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE', {
-			infer: true,
-		});
-		const databaseMarker = this.config.get('PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_MARKER', {
-			infer: true,
-		});
-		if (databaseRole === null || databaseMarker === null) {
-			throw new PlatformBootstrapError(
-				'BOOTSTRAP_UNSAFE_DATABASE',
-				'The approved database role and marker are required.',
-			);
-		}
 		await verifyBootstrapDatabase(transaction, {
 			databaseName: target.databaseName,
-			databaseRole,
-			databaseMarker,
+			databaseRole: target.databaseRole,
 		});
 	}
 
