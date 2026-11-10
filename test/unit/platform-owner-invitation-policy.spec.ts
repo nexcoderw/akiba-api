@@ -1,4 +1,4 @@
-import { OrganizationOwnerInvitationStatus, OrganizationStatus } from '@nexcoderw/gym-db';
+import { OrganizationOwnerInvitationStatus, OrganizationStatus } from '@nexcoderw/akiba-db';
 
 import {
 	assertOrganizationCanReceiveOwnerInvitation,
