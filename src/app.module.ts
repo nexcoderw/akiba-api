@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
+import { RouteAccessGuard } from './common/security/route-access.guard.js';
 import type { EnvironmentVariables } from './config/environment.types.js';
 import { validateEnvironment } from './config/environment.validation.js';
 import { DatabaseIntegrationModule } from './infrastructure/database/database-integration.module.js';
@@ -35,6 +36,6 @@ import { PlatformModule } from './modules/platform/platform.module.js';
 		OwnerModule,
 		PlatformModule,
 	],
-	providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+	providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }, { provide: APP_GUARD, useClass: RouteAccessGuard }],
 })
 export class AppModule {}
