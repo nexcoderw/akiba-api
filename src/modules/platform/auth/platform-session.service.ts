@@ -8,7 +8,7 @@ import {
 	UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PlatformStaffStatus, Prisma, PrismaService, UserStatus } from '@nexcoderw/gym-db';
+import { PlatformStaffStatus, Prisma, PrismaService, UserStatus } from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
 import { databaseErrorCode } from '../../../common/errors/database-error-code.js';
@@ -212,7 +212,7 @@ export class PlatformSessionService {
 		);
 
 		if (principal === null) {
-			this.logger.warn('platform_session_rejected');
+			this.logger.warn(JSON.stringify({ event: 'platform_session_rejected' }));
 			throw new UnauthorizedException(PLATFORM_AUTH_ERROR.invalidSession);
 		}
 		return principal;
@@ -227,7 +227,7 @@ export class PlatformSessionService {
 			data: { revokedAt: now },
 		});
 		if (revoked.count === 1) {
-			this.logger.log('platform_session_revoked');
+			this.logger.log(JSON.stringify({ event: 'platform_session_revoked' }));
 		}
 	}
 }
