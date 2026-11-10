@@ -76,7 +76,7 @@ describe('PlatformLoginService', () => {
 			id: 'user-id',
 			status: UserStatus.ACTIVE,
 			emailVerifiedAt: new Date('2030-01-01T00:00:00.000Z'),
-			passwordCredential: { passwordHash: 'approved-hash' },
+			passwordCredential: { passwordHash: 'approved-hash', normalization: 'raw', disabledAt: null },
 			platformStaff: {
 				id: 'staff-id',
 				status: PlatformStaffStatus.ACTIVE,
@@ -97,6 +97,13 @@ describe('PlatformLoginService', () => {
 			),
 		).resolves.toMatchObject({ challengeToken: 'challenge-token', methods: ['totp'] });
 		expect(challengeCreate).toHaveBeenCalledTimes(1);
+		expect(challengeCreate).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					createdAt: new Date('2030-01-01T00:00:00.000Z'),
+				}),
+			}),
+		);
 		expect(clearAccount).toHaveBeenCalledWith('admin@example.com');
 		expect(runTransaction).toHaveBeenCalledWith(expect.any(Array), {
 			isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -122,7 +129,11 @@ describe('PlatformLoginService', () => {
 				id: 'user-id',
 				status: UserStatus.ACTIVE,
 				emailVerifiedAt: new Date('2030-01-01T00:00:00.000Z'),
-				passwordCredential: { passwordHash: 'approved-hash' },
+				passwordCredential: {
+					passwordHash: 'approved-hash',
+					normalization: 'raw',
+					disabledAt: null,
+				},
 				platformStaff: {
 					id: 'staff-id',
 					status: PlatformStaffStatus.ACTIVE,
@@ -169,7 +180,7 @@ describe('PlatformLoginService', () => {
 		await expect(
 			service.login({ email: 'missing@example.com', password: 'fictional password' }, '192.0.2.10'),
 		).rejects.toMatchObject({ status: 401 });
-		expect(verifyPassword).toHaveBeenCalledWith('dummy-hash', 'fictional password');
+		expect(verifyPassword).toHaveBeenCalledWith('dummy-hash', 'fictional password', 'raw');
 		expect(recordFailure).toHaveBeenCalledTimes(1);
 		expect(challengeCreate).not.toHaveBeenCalled();
 	});
@@ -179,7 +190,7 @@ describe('PlatformLoginService', () => {
 			id: 'user-id',
 			status: UserStatus.ACTIVE,
 			emailVerifiedAt: new Date('2030-01-01T00:00:00.000Z'),
-			passwordCredential: { passwordHash: 'approved-hash' },
+			passwordCredential: { passwordHash: 'approved-hash', normalization: 'raw', disabledAt: null },
 			platformStaff: {
 				id: 'staff-id',
 				status: PlatformStaffStatus.ACTIVE,
