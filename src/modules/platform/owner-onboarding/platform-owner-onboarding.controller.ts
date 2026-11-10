@@ -32,6 +32,7 @@ import {
 	ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 
+import { AccessBoundary } from '../../../common/security/route-access.decorator.js';
 import { ApiErrorResponseDto } from '../../../common/dto/api-error-response.dto.js';
 import { RequirePlatformCsrf } from '../auth/platform-csrf.decorator.js';
 import { PlatformOriginCsrfGuard } from '../auth/platform-origin-csrf.guard.js';
@@ -60,6 +61,7 @@ import { OWNER_INVITATION_PERMISSION } from './platform-owner-onboarding.constan
 	description: 'Invitation persistence or durable ownership auditing is unavailable.',
 })
 @UseGuards(PlatformSessionGuard, PlatformOriginCsrfGuard, PlatformPermissionGuard)
+@AccessBoundary('platform')
 @Controller('platform/organizations/:organizationId/owner-invitations')
 export class PlatformOwnerOnboardingController {
 	constructor(
@@ -101,7 +103,7 @@ export class PlatformOwnerOnboardingController {
 				message: 'Delivery accepts no request fields.',
 			});
 		}
-		return this.delivery.queue(this.context(request), organizationId, invitationId);
+		return this.delivery.queue(this.context(request), request.platformPrincipal, organizationId, invitationId);
 	}
 
 	@Post()
@@ -126,7 +128,7 @@ export class PlatformOwnerOnboardingController {
 		@Body() input: CreateOwnerInvitationDto,
 		@Req() request: PlatformRequest,
 	): Promise<OwnerInvitationResponseDto> {
-		return this.onboarding.create(this.context(request), organizationId, input);
+		return this.onboarding.create(this.context(request), request.platformPrincipal, organizationId, input);
 	}
 
 	@Get()
@@ -143,8 +145,9 @@ export class PlatformOwnerOnboardingController {
 	list(
 		@Param('organizationId', new ParseUUIDPipe()) organizationId: string,
 		@Query() query: ListOwnerInvitationsQueryDto,
+		@Req() request: PlatformRequest,
 	): Promise<OwnerInvitationListResponseDto> {
-		return this.onboarding.list(organizationId, query);
+		return this.onboarding.list(request.platformPrincipal, organizationId, query);
 	}
 
 	@Post(':invitationId/revocation')
@@ -168,7 +171,7 @@ export class PlatformOwnerOnboardingController {
 		@Param('invitationId', new ParseUUIDPipe()) invitationId: string,
 		@Req() request: PlatformRequest,
 	): Promise<OwnerInvitationResponseDto> {
-		return this.onboarding.revoke(this.context(request), organizationId, invitationId);
+		return this.onboarding.revoke(this.context(request), request.platformPrincipal, organizationId, invitationId);
 	}
 
 	private context(request: PlatformRequest): OwnerInvitationMutationContext {
