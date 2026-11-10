@@ -20,8 +20,6 @@
 		"test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --runInBand",
 		"test:unit": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects unit --runInBand",
 		"test:integration": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects integration --runInBand",
-		"test:bootstrap:postgres": "node --env-file=.env.local --env-file=.env.bootstrap-test.local --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects integration --runInBand --testPathPattern=platform-bootstrap-postgres",
-		"test:bootstrap:postgres:managed": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects integration --runInBand --testPathPattern=platform-bootstrap-postgres",
 		"test:e2e": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects e2e --runInBand",
 		"test:cov": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --coverage --runInBand",
 		"bootstrap:platform-owner:init": "node dist/cli/platform-owner-bootstrap.js initialize",
