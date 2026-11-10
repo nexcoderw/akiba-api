@@ -9,6 +9,8 @@ export interface EnvironmentVariables {
 	readonly NODE_ENV: NodeEnvironment;
 	readonly HOST: string;
 	readonly PORT: number;
+	readonly BODY_LIMIT_BYTES: number;
+	readonly TRUST_PROXY_CIDRS: string[];
 	readonly CORS_ORIGINS: string[];
 	readonly SWAGGER_ENABLED: boolean;
 	readonly RATE_LIMIT_TTL_MS: number;
