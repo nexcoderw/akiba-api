@@ -13,10 +13,16 @@ import { PlatformOrganizationMutationsService } from '../../src/modules/platform
 import {
 	createPlatformOrganizationsDatabaseFixture,
 	ORGANIZATION_ID,
+	organizationSessionFixture,
 } from '../fixtures/platform-organizations-database.fixture.js';
+
+import type { PlatformPrincipal } from '../../src/modules/platform/auth/platform-auth.types.js';
+import { PlatformSessionService } from '../../src/modules/platform/auth/platform-session.service.js';
+import { PLATFORM_PERMISSION } from '../../src/modules/platform/auth/platform-permission.constants.js';
 
 describe('organization module integration (adapter fake; no live PostgreSQL)', () => {
 	let module: TestingModule;
+	let principal: PlatformPrincipal;
 	const database = createPlatformOrganizationsDatabaseFixture();
 	beforeAll(async () => {
 		module = await Test.createTestingModule({ imports: [AppModule] })
@@ -26,6 +32,14 @@ describe('organization module integration (adapter fake; no live PostgreSQL)', (
 			.useValue(database.prisma)
 			.compile();
 	});
+	beforeEach(async () => {
+		database.sessionFindUnique.mockResolvedValue(organizationSessionFixture(Object.values(PLATFORM_PERMISSION)));
+		principal = await module.get(PlatformSessionService).authenticate(
+			'fictional-integration-session-with-at-least-32-characters',
+		);
+		database.runTransaction.mockClear();
+	});
+
 	afterAll(async () => {
 		await module.close();
 	});
@@ -36,7 +50,7 @@ describe('organization module integration (adapter fake; no live PostgreSQL)', (
 	});
 	it('resolves the registered controller and explicit read contract', async () => {
 		const controller = module.get(PlatformOrganizationsController);
-		expect(await controller.list({ limit: 20 })).toMatchObject({
+		expect(await controller.list({ limit: 20 }, { platformPrincipal: principal })).toMatchObject({
 			items: [{ id: ORGANIZATION_ID, name: 'Kimihurura Supplies' }],
 			nextCursor: null,
 		});
@@ -49,6 +63,7 @@ describe('organization module integration (adapter fake; no live PostgreSQL)', (
 					actorPlatformStaffId: '33333333-3333-4333-8333-333333333333',
 					requestId: 'fictional-request',
 				},
+				principal,
 				{ name: 'Kimihurura Supplies', slug: 'kimihurura' },
 			),
 		).resolves.toMatchObject({ id: ORGANIZATION_ID });
@@ -77,6 +92,7 @@ describe('organization module integration (adapter fake; no live PostgreSQL)', (
 					actorPlatformStaffId: '33333333-3333-4333-8333-333333333333',
 					requestId: 'fictional-request',
 				},
+				principal,
 				{ name: 'Kimihurura Supplies', slug: 'kimihurura' },
 			),
 		).rejects.toMatchObject({
