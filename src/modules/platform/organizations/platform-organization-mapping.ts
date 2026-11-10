@@ -1,4 +1,4 @@
-import type { Organization, Prisma } from '@nexcoderw/gym-db';
+import type { Organization, Prisma } from '@nexcoderw/akiba-db';
 
 import type { OrganizationResponseDto } from './dto/organization-response.dto.js';
 
