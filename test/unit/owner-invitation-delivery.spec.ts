@@ -64,9 +64,9 @@ async function setup(input = invitationDeliveryInput()) {
 			{ provide: ResendOwnerInvitationEmailService, useValue: { send } },
 		],
 	}).compile();
-	const principal = await module.get(PlatformSessionService).authenticate(
-		'fictional-service-session-with-at-least-32-characters',
-	);
+	const principal = await module
+		.get(PlatformSessionService)
+		.authenticate('fictional-service-session-with-at-least-32-characters');
 	return {
 		principal,
 		...database,
@@ -83,8 +83,9 @@ describe('audited invitation delivery and worker policy', () => {
 		const fixture = await setup();
 		try {
 			for (const identity of [undefined, { ...fixture.principal }]) {
-				await expect(fixture.service.queue(context, identity, ORGANIZATION_ID, OWNER_INVITATION_ID))
-					.rejects.toMatchObject({ status: 403 });
+				await expect(
+					fixture.service.queue(context, identity, ORGANIZATION_ID, OWNER_INVITATION_ID),
+				).rejects.toMatchObject({ status: 403 });
 			}
 			expect(fixture.deliveryCreate).not.toHaveBeenCalled();
 			expect(fixture.state.delivery).toBeNull();
@@ -96,11 +97,21 @@ describe('audited invitation delivery and worker policy', () => {
 	it('creates one encrypted reservation and one audit; duplicates mint no new token', async () => {
 		const fixture = await setup();
 		try {
-			const first = await fixture.service.queue(context, fixture.principal, ORGANIZATION_ID, OWNER_INVITATION_ID);
-			const digest = fixture.state.delivery?.tokenDigest;
-			expect(await fixture.service.queue(context, fixture.principal, ORGANIZATION_ID, OWNER_INVITATION_ID)).toEqual(
-				first,
+			const first = await fixture.service.queue(
+				context,
+				fixture.principal,
+				ORGANIZATION_ID,
+				OWNER_INVITATION_ID,
 			);
+			const digest = fixture.state.delivery?.tokenDigest;
+			expect(
+				await fixture.service.queue(
+					context,
+					fixture.principal,
+					ORGANIZATION_ID,
+					OWNER_INVITATION_ID,
+				),
+			).toEqual(first);
 			expect(fixture.deliveryCreate).toHaveBeenCalledTimes(1);
 			expect(fixture.ownershipAuditCreate).toHaveBeenCalledTimes(1);
 			const auditCall: unknown = fixture.ownershipAuditCreate.mock.calls[0]?.[0];
