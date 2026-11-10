@@ -188,8 +188,11 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
 	}
 
 	const corsOrigins = parseOrigins(input.CORS_ORIGINS, nodeEnvironment);
-	const apiPublicOrigin = parseOrigin(input.API_PUBLIC_ORIGIN, 'API_PUBLIC_ORIGIN',
-		nodeEnvironment === 'production' ? undefined : 'http://localhost:3000');
+	const apiPublicOrigin = parseOrigin(
+		input.API_PUBLIC_ORIGIN,
+		'API_PUBLIC_ORIGIN',
+		nodeEnvironment === 'production' ? undefined : 'http://localhost:3000',
+	);
 	if (nodeEnvironment === 'production' && !apiPublicOrigin.startsWith('https://')) {
 		throw new Error('API_PUBLIC_ORIGIN must use HTTPS in production.');
 	}
