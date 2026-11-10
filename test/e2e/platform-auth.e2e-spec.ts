@@ -10,9 +10,9 @@ import { OfflineDatabaseModule } from '../fixtures/offline-database.module.js';
 import { configureApplication } from '../../src/app-bootstrap.js';
 import { AccessBoundary } from '../../src/common/security/route-access.decorator.js';
 import { PlatformOriginCsrfGuard } from '../../src/modules/platform/auth/platform-origin-csrf.guard.js';
+import { PlatformAuthModule } from '../../src/modules/platform/auth/platform-auth.module.js';
 import { AppModule } from '../../src/app.module.js';
 import { validateEnvironment } from '../../src/config/environment.validation.js';
-import { PlatformCookieService } from '../../src/modules/platform/auth/platform-cookie.service.js';
 import { PlatformLoginService } from '../../src/modules/platform/auth/platform-login.service.js';
 import { PlatformMfaService } from '../../src/modules/platform/auth/platform-mfa.service.js';
 import { PlatformEmailOtpService } from '../../src/modules/platform/auth/platform-email-otp.service.js';
@@ -75,15 +75,8 @@ describe('platform authentication HTTP API (e2e)', () => {
 		});
 
 		const module = await Test.createTestingModule({
-			imports: [AppModule],
+			imports: [AppModule, PlatformAuthModule],
 			controllers: [PlatformPermissionProbeController],
-			providers: [
-				PlatformCookieService,
-				PlatformOriginCsrfGuard,
-				PlatformPermissionGuard,
-				PlatformSessionGuard,
-				PlatformSessionService,
-			],
 		})
 			.overrideModule(DatabaseIntegrationModule)
 			.useModule(OfflineDatabaseModule)
@@ -232,9 +225,23 @@ describe('platform authentication HTTP API (e2e)', () => {
 	it('permits an authenticated session with the explicit permission', async () => {
 		await request(requireApplication(application).getHttpServer())
 			.get('/api/v1/platform/permission-probe')
+			.set('Origin', ADMIN_ORIGIN)
 			.set('Cookie', `akiba-platform-session=${SESSION_TOKEN}`)
 			.expect(200, { status: 'permitted' });
 	});
+
+	it.each([undefined, 'https://foreign.example'])(
+		'rejects the permission probe without a trusted Origin: %s',
+		async (origin) => {
+			const before = authenticate.mock.calls.length;
+			const probe = request(requireApplication(application).getHttpServer())
+				.get('/api/v1/platform/permission-probe')
+				.set('Cookie', `akiba-platform-session=${SESSION_TOKEN}`);
+			if (origin !== undefined) probe.set('Origin', origin);
+			await probe.expect(403);
+			expect(authenticate).toHaveBeenCalledTimes(before);
+		},
+	);
 
 	it('does not grant permission solely from an administrator role name', async () => {
 		authenticate.mockResolvedValueOnce({
@@ -250,6 +257,7 @@ describe('platform authentication HTTP API (e2e)', () => {
 
 		await request(requireApplication(application).getHttpServer())
 			.get('/api/v1/platform/permission-probe')
+			.set('Origin', ADMIN_ORIGIN)
 			.set('Cookie', `akiba-platform-session=${SESSION_TOKEN}`)
 			.expect(403);
 	});
