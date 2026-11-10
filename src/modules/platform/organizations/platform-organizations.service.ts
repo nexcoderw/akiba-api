@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { OrganizationStatus, Prisma, PrismaService } from '@nexcoderw/gym-db';
+import { OrganizationStatus, Prisma, PrismaService } from '@nexcoderw/akiba-db';
 
 import type { ListOrganizationsQueryDto } from './dto/list-organizations-query.dto.js';
 import type { OrganizationListResponseDto } from './dto/organization-list-response.dto.js';
