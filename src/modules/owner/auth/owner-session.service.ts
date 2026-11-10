@@ -9,7 +9,7 @@ import {
 	Prisma,
 	PrismaService,
 	UserStatus,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 
 import { databaseErrorCode } from '../../../common/errors/database-error-code.js';
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
