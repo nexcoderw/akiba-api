@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { parseEnv } from 'node:util';
 
 async function readRootFile(name: string): Promise<string> {
@@ -6,27 +6,36 @@ async function readRootFile(name: string): Promise<string> {
 }
 
 describe('API workflow environment boundaries', () => {
-	it('uses an explicit development Neon placeholder without provisioning an extra database', async () => {
-		const runtime = parseEnv(await readRootFile('.env.local.example'));
+	it('tracks only the development and production environment templates', async () => {
+		const files = await readdir(new URL('../../', import.meta.url));
+		expect(
+			files.filter((name) => name.startsWith('.env') && name.endsWith('.example')).sort(),
+		).toEqual(['.env.local.example', '.env.production.example']);
+	});
+
+	it.each([
+		['.env.local.example', 'development', 'development_pooler_host'],
+		['.env.production.example', 'production', 'production_pooler_host'],
+	])('uses the existing pooled connection in %s', async (file, environment, host) => {
+		const runtime = parseEnv(await readRootFile(file));
 		if (runtime.DATABASE_URL === undefined) throw new Error('Missing runtime URL placeholder.');
 		const url = new URL(runtime.DATABASE_URL);
-		expect(url.hostname.toLowerCase()).toBe('development_pooler_host');
+		expect(runtime.NODE_ENV).toBe(environment);
+		expect(url.hostname.toLowerCase()).toBe(host);
 		expect(url.pathname).toBe('/NEON_DATABASE');
 		expect(url.username).toBe('NEON_USER');
 		expect(url.searchParams.get('sslmode')).toBe('require');
-	});
-
-	it('keeps unsupported legacy operator and live-test profiles disabled without target credentials', async () => {
-		for (const file of ['.env.bootstrap.local.example', '.env.bootstrap-test.local.example']) {
-			const profile = parseEnv(await readRootFile(file));
-			expect(profile.PLATFORM_OWNER_BOOTSTRAP_ENABLED).toBe('false');
-			expect(profile.DATABASE_URL).toBeUndefined();
-			expect(profile.BOOTSTRAP_TEST_DATABASE_URL).toBeUndefined();
-			expect(profile.PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE).toBeUndefined();
-		}
-		const tests = parseEnv(await readRootFile('.env.bootstrap-test.local.example'));
-		expect(tests.NODE_ENV).toBe('test');
-		expect(tests.BOOTSTRAP_POSTGRES_TESTS).toBe('0');
+		expect(runtime.PLATFORM_OWNER_BOOTSTRAP_ENABLED).toBe('false');
+		expect(
+			Object.keys(runtime)
+				.filter((name) => name.includes('DATABASE'))
+				.sort(),
+		).toEqual([
+			'DATABASE_CONNECTION_TIMEOUT_MS',
+			'DATABASE_POOL_MAX',
+			'DATABASE_URL',
+			'OWNER_INVITATION_DELIVERY_DATABASE_APPROVED',
+		]);
 	});
 
 	it('routes bootstrap startup failures to the CLI handler without enabling raw logs', async () => {
@@ -36,15 +45,5 @@ describe('API workflow environment boundaries', () => {
 		);
 		expect(options?.[1]).toContain('logger: false');
 		expect(options?.[1]).toContain('abortOnError: false');
-	});
-
-	it('keeps operator and test targets out of normal application templates', async () => {
-		for (const file of ['.env.local.example', '.env.production.example']) {
-			const runtime = parseEnv(await readRootFile(file));
-			expect(runtime.PLATFORM_OWNER_BOOTSTRAP_ENABLED).toBe('false');
-			expect(runtime.BOOTSTRAP_TEST_DATABASE_URL).toBeUndefined();
-			expect(runtime.BOOTSTRAP_TEST_DATABASE_MARKER).toBeUndefined();
-			expect(runtime.PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE).toBeUndefined();
-		}
 	});
 });
