@@ -26,6 +26,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 
+import { AccessBoundary } from '../../../common/security/route-access.decorator.js';
 import { ApiErrorResponseDto } from '../../../common/dto/api-error-response.dto.js';
 import { OWNER_AUTH_ERROR } from '../auth/owner-auth.constants.js';
 import { OwnerCookieService } from '../auth/owner-cookie.service.js';
@@ -58,6 +59,7 @@ export class OwnerEnrollmentController {
 		private readonly tokens: OwnerTokenService,
 	) {}
 
+	@AccessBoundary('public')
 	@Post('owner-enrollment/challenges')
 	@HttpCode(HttpStatus.OK)
 	@Header('Cache-Control', 'no-store')
@@ -81,6 +83,7 @@ export class OwnerEnrollmentController {
 		return this.enrollment.start(input.invitationToken, undefined, request.ownerOrganizationSlug);
 	}
 
+	@AccessBoundary('public')
 	@Post('owner/auth/verify')
 	@HttpCode(HttpStatus.OK)
 	@Header('Cache-Control', 'no-store')
@@ -99,10 +102,12 @@ export class OwnerEnrollmentController {
 	): Promise<OwnerEnrollmentAuthenticatedResponseDto> {
 		return this.setAuthenticated(
 			response,
+			request.headers.origin ?? '',
 			await this.enrollment.verifyExisting(input, undefined, request.ownerOrganizationSlug),
 		);
 	}
 
+	@AccessBoundary('public')
 	@Post('owner-enrollment/registrations')
 	@HttpCode(HttpStatus.CREATED)
 	@Header('Cache-Control', 'no-store')
@@ -123,10 +128,12 @@ export class OwnerEnrollmentController {
 	): Promise<OwnerEnrollmentAuthenticatedResponseDto> {
 		return this.setAuthenticated(
 			response,
+			request.headers.origin ?? '',
 			await this.enrollment.register(input, undefined, request.ownerOrganizationSlug),
 		);
 	}
 
+	@AccessBoundary('owner-enrollment')
 	@Post('owner-enrollment/acceptances')
 	@HttpCode(HttpStatus.OK)
 	@Header('Cache-Control', 'no-store')
@@ -162,6 +169,7 @@ export class OwnerEnrollmentController {
 
 	private setAuthenticated(
 		response: Response,
+		origin: string,
 		result: {
 			readonly status: 'verified';
 			readonly expiresAt: string;
@@ -170,7 +178,7 @@ export class OwnerEnrollmentController {
 		},
 	): OwnerEnrollmentAuthenticatedResponseDto {
 		const csrfToken = this.tokens.create();
-		this.cookies.setSession(response, result.sessionToken, result.expiresAtDate);
+		this.cookies.setSession(response, result.sessionToken, result.expiresAtDate, origin);
 		this.cookies.setCsrf(response, csrfToken, result.expiresAtDate);
 		return { status: result.status, expiresAt: result.expiresAt, csrfToken };
 	}
