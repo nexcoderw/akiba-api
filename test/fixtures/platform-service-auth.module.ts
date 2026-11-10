@@ -28,11 +28,13 @@ export const PLATFORM_SERVICE_AUTH_DATABASE = Symbol('platform-service-auth-data
 		{
 			provide: PrismaService,
 			inject: [PLATFORM_SERVICE_AUTH_DATABASE],
-			useFactory: (database: ReturnType<typeof createPlatformDashboardDatabaseFixture>) => database.prisma,
+			useFactory: (database: ReturnType<typeof createPlatformDashboardDatabaseFixture>) =>
+				database.prisma,
 		},
 		{
 			provide: ConfigService,
-			useFactory: () => new ConfigService<EnvironmentVariables, true>(validateEnvironment({ NODE_ENV: 'test' })),
+			useFactory: () =>
+				new ConfigService<EnvironmentVariables, true>(validateEnvironment({ NODE_ENV: 'test' })),
 		},
 		PlatformTokenService,
 		PlatformSessionService,
