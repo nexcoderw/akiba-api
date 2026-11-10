@@ -28,6 +28,7 @@ export class PlatformBootstrapError extends Error {
 export interface PlatformBootstrapTarget {
 	readonly environment: string;
 	readonly databaseHost: string;
+	readonly databaseRole: string;
 	readonly databaseName: string;
 }
 
