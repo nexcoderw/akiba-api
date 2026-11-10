@@ -2,6 +2,8 @@ import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '@nexcoderw/akiba-db';
 
+import { DatabaseIntegrationModule } from '../../src/infrastructure/database/database-integration.module.js';
+import { OfflineDatabaseModule } from '../fixtures/offline-database.module.js';
 import { AppModule } from '../../src/app.module.js';
 import { createOpenApiDocument } from '../../src/docs/swagger.js';
 
@@ -10,6 +12,8 @@ describe('OpenAPI integration', () => {
 
 	beforeAll(async () => {
 		const module = await Test.createTestingModule({ imports: [AppModule] })
+			.overrideModule(DatabaseIntegrationModule)
+			.useModule(OfflineDatabaseModule)
 			.overrideProvider(PrismaService)
 			.useValue({})
 			.compile();
