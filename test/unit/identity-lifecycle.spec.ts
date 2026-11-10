@@ -103,11 +103,12 @@ describe('internal global identity and credential lifecycle (offline adapters)',
 		expect(stored?.tokenDigest).toMatch(/^[0-9a-f]{64}$/u);
 		expect(JSON.stringify(stored)).not.toContain(issued.token);
 		await identities.consumeEmailVerification(issued.token, context.requestId);
-		expect(await identities.profile(context, user.id)).toMatchObject({
+		const verified = await identities.profile(context, user.id);
+		expect(verified).toMatchObject({
 			status: UserStatus.ACTIVE,
 			identityVersion: 2,
-			emailVerifiedAt: expect.any(Date),
 		});
+		expect(Number.isFinite(verified.emailVerifiedAt?.getTime())).toBe(true);
 		await expect(
 			identities.consumeEmailVerification(issued.token, context.requestId),
 		).rejects.toMatchObject({ publicCode: 'ACCOUNT_ACTION_UNAVAILABLE' });
@@ -265,8 +266,10 @@ describe('internal global identity and credential lifecycle (offline adapters)',
 		);
 		expect(database.state.credentials.get(user.id)).toMatchObject({
 			version: 2,
-			disabledAt: expect.any(Date),
 		});
+		expect(Number.isFinite(database.state.credentials.get(user.id)?.disabledAt?.getTime())).toBe(
+			true,
+		);
 		expect(database.state.events.at(-1)).toMatchObject({
 			action: 'credential_compromised',
 			credentialVersion: 2,
