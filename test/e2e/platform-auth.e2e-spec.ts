@@ -5,6 +5,8 @@ import { Test } from '@nestjs/testing';
 import { PrismaService } from '@nexcoderw/akiba-db';
 import request from 'supertest';
 
+import { DatabaseIntegrationModule } from '../../src/infrastructure/database/database-integration.module.js';
+import { OfflineDatabaseModule } from '../fixtures/offline-database.module.js';
 import { configureApplication } from '../../src/app-bootstrap.js';
 import { AppModule } from '../../src/app.module.js';
 import { validateEnvironment } from '../../src/config/environment.validation.js';
@@ -79,6 +81,8 @@ describe('platform authentication HTTP API (e2e)', () => {
 				PlatformSessionService,
 			],
 		})
+			.overrideModule(DatabaseIntegrationModule)
+			.useModule(OfflineDatabaseModule)
 			.overrideProvider(PrismaService)
 			.useValue({})
 			.overrideProvider(PlatformLoginService)
