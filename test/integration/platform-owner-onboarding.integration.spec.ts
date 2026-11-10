@@ -39,10 +39,12 @@ describe('owner onboarding module integration (adapter fake; no live PostgreSQL)
 			.compile();
 	});
 	beforeEach(async () => {
-		database.sessionFindUnique.mockResolvedValue(organizationSessionFixture(Object.values(PLATFORM_PERMISSION)));
-		principal = await module.get(PlatformSessionService).authenticate(
-			'fictional-integration-session-with-at-least-32-characters',
+		database.sessionFindUnique.mockResolvedValue(
+			organizationSessionFixture(Object.values(PLATFORM_PERMISSION)),
 		);
+		principal = await module
+			.get(PlatformSessionService)
+			.authenticate('fictional-integration-session-with-at-least-32-characters');
 		database.runTransaction.mockClear();
 	});
 
