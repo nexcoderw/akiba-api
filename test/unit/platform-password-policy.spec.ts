@@ -10,9 +10,9 @@ import type { EnvironmentVariables } from '../../src/config/environment.types.js
 
 describe('future bootstrap password compatibility', () => {
 	it.each([
-		'A7!b2@Qx9#Za',
+		'A7!b2@Qx9#Za123',
 		'a longer fictional password',
-		'😀'.repeat(12),
+		'😀'.repeat(15),
 		'é'.repeat(512),
 		'x'.repeat(1024),
 	])('accepts only credentials compatible with the public login DTO: %#', async (password) => {
