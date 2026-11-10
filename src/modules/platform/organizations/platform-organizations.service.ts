@@ -20,7 +20,10 @@ export class PlatformOrganizationsService {
 	) {}
 
 	/** Platform control-plane lookup only; the feature module does not export this service. */
-	async get(principal: PlatformPrincipal | undefined, id: string): Promise<OrganizationResponseDto> {
+	async get(
+		principal: PlatformPrincipal | undefined,
+		id: string,
+	): Promise<OrganizationResponseDto> {
 		await this.sessions.authorize(principal, PLATFORM_PERMISSION.organizationsRead);
 		try {
 			const row = await this.prisma.organization.findUnique({
@@ -34,7 +37,10 @@ export class PlatformOrganizationsService {
 		}
 	}
 
-	async list(principal: PlatformPrincipal | undefined, query: ListOrganizationsQueryDto): Promise<OrganizationListResponseDto> {
+	async list(
+		principal: PlatformPrincipal | undefined,
+		query: ListOrganizationsQueryDto,
+	): Promise<OrganizationListResponseDto> {
 		await this.sessions.authorize(principal, PLATFORM_PERMISSION.organizationsRead);
 		if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 50) {
 			throw new BadRequestException({
