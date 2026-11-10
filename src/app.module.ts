@@ -8,6 +8,7 @@ import type { EnvironmentVariables } from './config/environment.types.js';
 import { validateEnvironment } from './config/environment.validation.js';
 import { DatabaseIntegrationModule } from './infrastructure/database/database-integration.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { IdentityModule } from './modules/identity/identity.module.js';
 import { OwnerModule } from './modules/owner/owner.module.js';
 import { PlatformModule } from './modules/platform/platform.module.js';
 
@@ -33,6 +34,7 @@ import { PlatformModule } from './modules/platform/platform.module.js';
 			}),
 		}),
 		HealthModule,
+		IdentityModule,
 		OwnerModule,
 		PlatformModule,
 	],
