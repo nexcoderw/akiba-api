@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config';
 
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
 
-export const OWNER_INVITATION_TOKEN_PURPOSE = 'gym-owner-invitation-v1';
+export const OWNER_INVITATION_TOKEN_PURPOSE = 'organization-owner-invitation-v1';
 
 @Injectable()
 export class OwnerInvitationTokenService {
