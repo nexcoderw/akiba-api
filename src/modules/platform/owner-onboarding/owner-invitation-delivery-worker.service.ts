@@ -10,7 +10,7 @@ import {
 	UserStatus,
 	type OrganizationOwnerInvitationDelivery,
 	type Prisma,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 
 import {
 	ResendOwnerInvitationEmailService,
