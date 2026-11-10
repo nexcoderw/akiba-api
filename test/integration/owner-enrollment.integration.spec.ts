@@ -1,5 +1,5 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import { PrismaService } from '@nexcoderw/gym-db';
+import { PrismaService } from '@nexcoderw/akiba-db';
 
 import { AppModule } from '../../src/app.module.js';
 import { OwnerSessionGuard } from '../../src/modules/owner/auth/owner-session.guard.js';
