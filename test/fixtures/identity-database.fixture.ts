@@ -41,6 +41,10 @@ type CredentialData = Partial<Omit<CredentialRow, 'version'>> & {
 	version?: number | { increment: number };
 };
 
+function databaseError(code: string): Error & { code: string } {
+	return Object.assign(new Error('Synthetic database constraint failure.'), { code });
+}
+
 /** Serial in-memory adapter with rollback and projection, not evidence of PostgreSQL constraints. */
 export function createIdentityDatabaseFixture() {
 	const state = {
@@ -109,7 +113,7 @@ export function createIdentityDatabaseFixture() {
 							(item) => item.email.toLowerCase() === args.data.email.toLowerCase(),
 						)
 					)
-						return Promise.reject({ code: 'P2002' });
+						return Promise.reject(databaseError('P2002'));
 					const now = new Date();
 					const user: UserRow = {
 						id: randomUUID(),
@@ -146,7 +150,7 @@ export function createIdentityDatabaseFixture() {
 								item.id !== user.id && item.email.toLowerCase() === args.data.email?.toLowerCase(),
 						)
 					)
-						return Promise.reject({ code: 'P2002' });
+						return Promise.reject(databaseError('P2002'));
 					const { identityVersion, ...data } = args.data;
 					Object.assign(user, data);
 					if (identityVersion !== undefined)
@@ -160,7 +164,7 @@ export function createIdentityDatabaseFixture() {
 				.fn<(args: { where: { id: string }; data: UserData }) => Promise<unknown>>()
 				.mockImplementation((args) => {
 					const user = state.users.get(args.where.id);
-					if (user === undefined) return Promise.reject({ code: 'P2025' });
+					if (user === undefined) return Promise.reject(databaseError('P2025'));
 					const { identityVersion, ...data } = args.data;
 					Object.assign(user, data);
 					if (identityVersion !== undefined)
@@ -189,7 +193,8 @@ export function createIdentityDatabaseFixture() {
 					}) => Promise<CredentialRow>
 				>()
 				.mockImplementation((args) => {
-					if (state.credentials.has(args.data.userId)) return Promise.reject({ code: 'P2002' });
+					if (state.credentials.has(args.data.userId))
+						return Promise.reject(databaseError('P2002'));
 					const row: CredentialRow = {
 						id: randomUUID(),
 						...args.data,
