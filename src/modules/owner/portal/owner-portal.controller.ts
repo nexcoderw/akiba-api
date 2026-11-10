@@ -1,12 +1,4 @@
-import {
-	Controller,
-	Get,
-	Header,
-	Param,
-	ParseUUIDPipe,
-	Req,
-	UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Header, Param, ParseUUIDPipe, Req, UseGuards } from '@nestjs/common';
 import {
 	ApiCookieAuth,
 	ApiForbiddenResponse,
@@ -18,7 +10,10 @@ import {
 	ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 
-import { AccessBoundary, TenantIdentityRead } from '../../../common/security/route-access.decorator.js';
+import {
+	AccessBoundary,
+	TenantIdentityRead,
+} from '../../../common/security/route-access.decorator.js';
 import { ApiErrorResponseDto } from '../../../common/dto/api-error-response.dto.js';
 import { OwnerOriginCsrfGuard } from '../auth/owner-origin-csrf.guard.js';
 import type { OwnerRequest } from '../auth/owner-request.js';
@@ -33,7 +28,10 @@ import { OwnerDashboardResponseDto } from './dto/owner-dashboard-response.dto.js
 @UseGuards(OwnerOriginCsrfGuard, OrganizationTenantGuard)
 @ApiCookieAuth('owner-session')
 export class OwnerPortalController {
-	constructor(private readonly access: TenantAuthorizationService, private readonly portal: TenantPortalService) {}
+	constructor(
+		private readonly access: TenantAuthorizationService,
+		private readonly portal: TenantPortalService,
+	) {}
 	@TenantIdentityRead()
 	@Get(':organizationId/dashboard')
 	@Header('Cache-Control', 'no-store')
