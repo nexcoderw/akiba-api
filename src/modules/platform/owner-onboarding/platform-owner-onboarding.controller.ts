@@ -103,7 +103,12 @@ export class PlatformOwnerOnboardingController {
 				message: 'Delivery accepts no request fields.',
 			});
 		}
-		return this.delivery.queue(this.context(request), request.platformPrincipal, organizationId, invitationId);
+		return this.delivery.queue(
+			this.context(request),
+			request.platformPrincipal,
+			organizationId,
+			invitationId,
+		);
 	}
 
 	@Post()
@@ -128,7 +133,12 @@ export class PlatformOwnerOnboardingController {
 		@Body() input: CreateOwnerInvitationDto,
 		@Req() request: PlatformRequest,
 	): Promise<OwnerInvitationResponseDto> {
-		return this.onboarding.create(this.context(request), request.platformPrincipal, organizationId, input);
+		return this.onboarding.create(
+			this.context(request),
+			request.platformPrincipal,
+			organizationId,
+			input,
+		);
 	}
 
 	@Get()
@@ -171,7 +181,12 @@ export class PlatformOwnerOnboardingController {
 		@Param('invitationId', new ParseUUIDPipe()) invitationId: string,
 		@Req() request: PlatformRequest,
 	): Promise<OwnerInvitationResponseDto> {
-		return this.onboarding.revoke(this.context(request), request.platformPrincipal, organizationId, invitationId);
+		return this.onboarding.revoke(
+			this.context(request),
+			request.platformPrincipal,
+			organizationId,
+			invitationId,
+		);
 	}
 
 	private context(request: PlatformRequest): OwnerInvitationMutationContext {
