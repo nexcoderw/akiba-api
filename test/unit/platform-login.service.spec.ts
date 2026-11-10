@@ -13,7 +13,7 @@ import { PlatformTokenService } from '../../src/modules/platform/auth/platform-t
 describe('PlatformLoginService', () => {
 	const userFindUnique = jest.fn<() => Promise<unknown>>();
 	const challengeUpdateMany = jest.fn<() => Promise<{ count: number }>>();
-	const challengeCreate = jest.fn<() => Promise<unknown>>();
+	const challengeCreate = jest.fn<(args: { data: { createdAt: Date } }) => Promise<unknown>>();
 	const runTransaction = jest
 		.fn<(operations: readonly Promise<unknown>[], options?: unknown) => Promise<unknown>>()
 		.mockImplementation(async (operations) => await Promise.all(operations));
@@ -97,12 +97,8 @@ describe('PlatformLoginService', () => {
 			),
 		).resolves.toMatchObject({ challengeToken: 'challenge-token', methods: ['totp'] });
 		expect(challengeCreate).toHaveBeenCalledTimes(1);
-		expect(challengeCreate).toHaveBeenCalledWith(
-			expect.objectContaining({
-				data: expect.objectContaining({
-					createdAt: new Date('2030-01-01T00:00:00.000Z'),
-				}),
-			}),
+		expect(challengeCreate.mock.calls[0]?.[0].data.createdAt).toEqual(
+			new Date('2030-01-01T00:00:00.000Z'),
 		);
 		expect(clearAccount).toHaveBeenCalledWith('admin@example.com');
 		expect(runTransaction).toHaveBeenCalledWith(expect.any(Array), {
