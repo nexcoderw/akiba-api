@@ -14,5 +14,6 @@ or treating ordinary request logs as compliance audit trails.
 
 ## Example and checklist
 
-Log method, route path, status, duration, and request ID—not the query string. Review classification,
+Log method, framework route template, status, duration and server request ID. Unknown routes use
+`unmatched`; never log raw paths, parameter values or query strings. Review classification,
 redaction, cardinality, retention, tenant scope, audit purpose, and access.
