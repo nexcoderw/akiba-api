@@ -1,19 +1,17 @@
-# Environment and Secrets
+# Environment and secrets
 
-## Standards
+Only development and production use live databases, matching akiba-db: the existing Neon branches,
+default database and managed owner. Do not provision additional databases or PostgreSQL roles. Keep
+only .env.local.example and .env.production.example as tracked templates. Do not add extra connection
+profiles or database identity metadata. API runtime uses its selected pooled DATABASE_URL;
+administrative connections and guarded live tests belong to akiba-db.
 
-Validate environment before accepting traffic. Production supplies values from managed secrets,
-sets exact non-tenant CORS origins, and validates tenant origins against one explicit DNS base domain;
-local templates contain placeholders only. Keep UTC timestamps and apply Africa/Kigali at business
-scheduling/display boundaries. Separate local, test, staging, and production resources and credentials.
+Development loads .env.local. Explicit NODE_ENV=production loads optional .env.production, with managed
+injected values taking precedence. Offline NODE_ENV=test ignores environment files and database URLs;
+tests replace the database module entirely. The real module must reject that test process before
+creating an adapter or pool. NODE_ENV=test is not an additional database environment.
 
-## Forbidden practices
-
-No committed `.env`, production defaults, silent fallback for security settings, shared test databases,
-or tokens in npm configuration.
-
-## Example and checklist
-
-Production fails startup when `CORS_ORIGINS` or `ORGANIZATION_PORTAL_BASE_DOMAIN` is absent. Review
-required/default values, parser bounds, reserved subdomains, secret source, rotation, environment
-isolation, and documentation.
+Validate PostgreSQL URLs, TLS, pool bounds, independent secrets, exact CORS origins, production HTTPS
+and secure cookies before accepting traffic. Never include secrets or connection strings in errors,
+logs, Git or npm configuration. No production fallback or automatic migration. Keep timestamps UTC
+and apply Africa/Kigali only at explicit display/scheduling boundaries.
