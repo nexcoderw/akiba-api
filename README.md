@@ -8,7 +8,8 @@ lifecycle. Build the sibling `api/db` package before installing or building this
 Use only the existing development and production Neon branches, their default database and managed
 owner. Development loads `.env.local`; an explicitly selected `NODE_ENV=production` loads optional
 `.env.production`, with injected secrets taking precedence. Copy the corresponding `.example` file
-and fill secrets privately. The API needs only the pooled `DATABASE_URL`; direct migration connections
+and fill secrets privately. The examples use `sslmode=verify-full` for explicit certificate and
+hostname verification. The API needs only the pooled `DATABASE_URL`; direct migration connections
 and guarded live database checks remain in `api/db`. No separate database or role is provisioned here.
 
 Offline unit, module and HTTP tests replace the database module with fakes. `NODE_ENV=test` loads no
