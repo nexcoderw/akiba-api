@@ -3,7 +3,7 @@ import { Logger } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { getOptionsToken } from '@nestjs/throttler';
-import { PlatformStaffStatus, PrismaService, UserStatus } from '@nexcoderw/gym-db';
+import { PlatformStaffStatus, PrismaService, UserStatus } from '@nexcoderw/akiba-db';
 import request from 'supertest';
 
 import { configureApplication } from '../../src/app-bootstrap.js';
@@ -202,10 +202,10 @@ describe('platform dashboard HTTP API (real session and permission guards)', () 
 		expect(database.userCount).not.toHaveBeenCalled();
 	});
 
-	it('does not accept a normal gym user cookie or tenant ownership hints', async () => {
+	it('does not accept a normal organization user cookie or tenant ownership hints', async () => {
 		await dashboardRequest()
-			.set('Cookie', `gym-user-session=${SESSION_TOKEN}`)
-			.set('x-role', 'gym.owner')
+			.set('Cookie', `organization-user-session=${SESSION_TOKEN}`)
+			.set('x-role', 'organization.owner')
 			.set('x-organization-id', 'fictional-org')
 			.expect(401);
 		expect(database.userCount).not.toHaveBeenCalled();
@@ -235,8 +235,8 @@ describe('platform dashboard HTTP API (real session and permission guards)', () 
 			const response = await dashboardRequest().set('Cookie', COOKIE).expect(500);
 			const body: unknown = response.body;
 			expect(body).toMatchObject({
-				error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' },
-				path: ENDPOINT,
+				code: 'INTERNAL_ERROR',
+				detail: 'An unexpected error occurred. Please try again later.',
 			});
 			expect(JSON.stringify(body)).not.toContain('fictional SQL');
 			expect(JSON.stringify(body)).not.toContain('do-not-expose');
@@ -256,7 +256,7 @@ describe('platform dashboard HTTP API (real session and permission guards)', () 
 			}
 			const response = await dashboardRequest(limitedApp).set('Cookie', COOKIE).expect(429);
 			const body: unknown = response.body;
-			expect(body).toMatchObject({ error: { code: 'RATE_LIMITED' } });
+			expect(body).toMatchObject({ code: 'RATE_LIMITED' });
 		} finally {
 			await limitedApp.close();
 		}
