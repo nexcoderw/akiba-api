@@ -1,7 +1,7 @@
-export const OWNER_SESSION_COOKIE = '__Host-nexcode-owner-session';
-export const LOCAL_OWNER_SESSION_COOKIE = 'nexcode-owner-session';
-export const OWNER_CSRF_COOKIE = '__Host-nexcode-owner-csrf';
-export const LOCAL_OWNER_CSRF_COOKIE = 'nexcode-owner-csrf';
+export const OWNER_SESSION_COOKIE = '__Host-akiba-owner-session';
+export const LOCAL_OWNER_SESSION_COOKIE = 'akiba-owner-session';
+export const OWNER_CSRF_COOKIE = '__Host-akiba-owner-csrf';
+export const LOCAL_OWNER_CSRF_COOKIE = 'akiba-owner-csrf';
 export const OWNER_CSRF_HEADER = 'x-owner-csrf-token';
 export const OWNER_CSRF_REQUIRED_METADATA = 'owner-auth:csrf-required';
 
