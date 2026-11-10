@@ -2,7 +2,7 @@
 
 ## Purpose and scope
 
-Keep NEXCODE Gym API history reviewable while the developer retains every Git write.
+Keep Akiba API history reviewable while the developer retains every Git write.
 
 ## Mandatory requirements
 
