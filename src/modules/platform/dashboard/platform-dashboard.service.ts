@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PlatformStaffStatus, Prisma, PrismaService } from '@nexcoderw/gym-db';
+import { PlatformStaffStatus, Prisma, PrismaService } from '@nexcoderw/akiba-db';
 
 import type { PlatformDashboardSummaryDto } from './dto/platform-dashboard-summary.dto.js';
 
