@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { parse } from 'cookie';
 import type { Request, Response } from 'express';
 
+import { openOwnerSession, sealOwnerSession } from './owner-session-cookie.js';
+
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
 import {
 	LOCAL_OWNER_CSRF_COOKIE,
@@ -13,26 +15,28 @@ import {
 
 @Injectable()
 export class OwnerCookieService {
+	private readonly bindingKey: Buffer;
 	private readonly secure: boolean;
 	private readonly sessionCookieName: string;
 	private readonly csrfCookieName: string;
 
 	constructor(config: ConfigService<EnvironmentVariables, true>) {
+		this.bindingKey = Buffer.from(config.get('OWNER_AUTH_TOKEN_PEPPER', { infer: true }), 'base64');
 		this.secure = config.get('OWNER_AUTH_COOKIE_SECURE', { infer: true });
 		this.sessionCookieName = this.secure ? OWNER_SESSION_COOKIE : LOCAL_OWNER_SESSION_COOKIE;
 		this.csrfCookieName = this.secure ? OWNER_CSRF_COOKIE : LOCAL_OWNER_CSRF_COOKIE;
 	}
 
 	readSession(request: Request): string | undefined {
-		return this.read(request, this.sessionCookieName);
+		return openOwnerSession(this.read(request, this.sessionCookieName), request.headers.origin, this.bindingKey);
 	}
 
 	readCsrf(request: Request): string | undefined {
 		return this.read(request, this.csrfCookieName);
 	}
 
-	setSession(response: Response, token: string, expiresAt: Date): void {
-		response.cookie(this.sessionCookieName, token, {
+	setSession(response: Response, token: string, expiresAt: Date, origin: string): void {
+		response.cookie(this.sessionCookieName, sealOwnerSession(token, origin, this.bindingKey), {
 			expires: expiresAt,
 			httpOnly: true,
 			path: '/',
