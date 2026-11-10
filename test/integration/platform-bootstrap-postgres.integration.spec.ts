@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { jest } from '@jest/globals';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { PrismaService, UserStatus, type Prisma } from '@nexcoderw/gym-db';
+import { PrismaService, UserStatus, type Prisma } from '@nexcoderw/akiba-db';
 import * as OTPAuth from 'otpauth';
 
 import type { EnvironmentVariables } from '../../src/config/environment.types.js';
@@ -44,7 +44,7 @@ postgresDescribe('first-owner bootstrap with disposable PostgreSQL', () => {
 				'PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_NAME',
 				environment.PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_NAME,
 			),
-			databaseRole: 'gym_bootstrap_test',
+			databaseRole: 'akiba_bootstrap_test',
 			databaseMarker: requireValue(
 				'BOOTSTRAP_TEST_DATABASE_MARKER',
 				environment.PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_MARKER,
@@ -85,8 +85,8 @@ postgresDescribe('first-owner bootstrap with disposable PostgreSQL', () => {
 		);
 		const url = new URL(databaseUrl);
 		if (
-			decodeURIComponent(url.username) !== 'gym_bootstrap_test' ||
-			!marker.startsWith('nexcode-gym:disposable-bootstrap-test:') ||
+			decodeURIComponent(url.username) !== 'akiba_bootstrap_test' ||
+			!marker.startsWith('akiba:disposable-bootstrap-test:') ||
 			/(?:prod|production|live)/iu.test(`${url.hostname}/${url.pathname}`) ||
 			['postgres', 'template0', 'template1'].includes(url.pathname.slice(1))
 		) {
@@ -111,7 +111,7 @@ postgresDescribe('first-owner bootstrap with disposable PostgreSQL', () => {
 			PLATFORM_OWNER_BOOTSTRAP_ENABLED: 'true',
 			PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_HOST: url.hostname,
 			PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_NAME: decodeURIComponent(url.pathname.slice(1)),
-			PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE: 'gym_bootstrap_test',
+			PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE: 'akiba_bootstrap_test',
 			PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_MARKER: marker,
 		});
 		config = new ConfigService<EnvironmentVariables, true>(environment);
@@ -320,7 +320,7 @@ postgresDescribe('first-owner bootstrap with disposable PostgreSQL', () => {
 	it('rejects a mismatched provisioned marker before writing an owner', async () => {
 		const wrongConfig = new ConfigService<EnvironmentVariables, true>({
 			...environment,
-			PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_MARKER: `nexcode-gym:disposable-bootstrap-test:${randomUUID()}`,
+			PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_MARKER: `akiba:disposable-bootstrap-test:${randomUUID()}`,
 		});
 		await expect(initialize(createService(wrongConfig))).rejects.toMatchObject({
 			code: 'BOOTSTRAP_UNSAFE_DATABASE',
