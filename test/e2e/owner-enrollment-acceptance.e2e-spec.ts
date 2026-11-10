@@ -15,6 +15,7 @@ import { TenantTransactionService } from '@nexcoderw/akiba-db';
 import { OrganizationRoutingService } from '../../src/modules/owner/auth/organization-routing.service.js';
 import { sealOwnerSession } from '../../src/modules/owner/auth/owner-session-cookie.js';
 import { OrganizationTenantGuard } from '../../src/modules/owner/tenant/organization-tenant.guard.js';
+import { OrganizationAuthorizationService } from '../../src/modules/owner/tenant/organization-authorization.service.js';
 import { TenantAuthorizationService } from '../../src/modules/owner/tenant/tenant-authorization.service.js';
 import { TenantPortalService } from '../../src/modules/owner/tenant/tenant-portal.service.js';
 import { OwnerCookieService } from '../../src/modules/owner/auth/owner-cookie.service.js';
@@ -56,6 +57,7 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 				OwnerCookieService,
 				OrganizationRoutingService,
 				OrganizationTenantGuard,
+				OrganizationAuthorizationService,
 				TenantAuthorizationService,
 				TenantPortalService,
 				{ provide: TenantTransactionService, useValue: { run: jest.fn() } },
