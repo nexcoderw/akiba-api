@@ -68,7 +68,9 @@ export class PlatformDashboardController {
 		description: 'A safe internal error; no database details or stack traces are returned.',
 		type: ApiErrorResponseDto,
 	})
-	async getSummary(@Req() request: Pick<PlatformRequest, 'platformPrincipal'>): Promise<PlatformDashboardSummaryDto> {
+	async getSummary(
+		@Req() request: Pick<PlatformRequest, 'platformPrincipal'>,
+	): Promise<PlatformDashboardSummaryDto> {
 		return await this.dashboard.getSummary(request.platformPrincipal);
 	}
 }
