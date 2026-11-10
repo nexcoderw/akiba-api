@@ -1,7 +1,7 @@
 import { jest } from '@jest/globals';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { PlatformStaffStatus, PrismaService, UserStatus } from '@nexcoderw/gym-db';
+import { PlatformStaffStatus, PrismaService, UserStatus } from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from '../../src/config/environment.types.js';
 import { validateEnvironment } from '../../src/config/environment.validation.js';
@@ -53,13 +53,13 @@ describe('PlatformOwnerBootstrapService', () => {
 		const config = new ConfigService<EnvironmentVariables, true>(
 			validateEnvironment({
 				NODE_ENV: 'test',
-				DATABASE_URL: 'postgresql://gym_bootstrap:secret@approved.neon.tech/neondb',
+				DATABASE_URL: 'postgresql://akiba_bootstrap:secret@approved.neon.tech/neondb',
 				PLATFORM_OWNER_BOOTSTRAP_ENABLED: 'true',
 				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_HOST: 'approved.neon.tech',
 				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_NAME: 'neondb',
-				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE: 'gym_bootstrap',
+				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE: 'akiba_bootstrap',
 				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_MARKER:
-					'nexcode-gym:bootstrap:724fbc40-515c-4a30-a4bb-8a6458a24396',
+					'akiba:bootstrap:724fbc40-515c-4a30-a4bb-8a6458a24396',
 			}),
 		);
 		const module = await Test.createTestingModule({
@@ -84,9 +84,9 @@ describe('PlatformOwnerBootstrapService', () => {
 		queryRaw.mockResolvedValueOnce([{ acquired: true }]).mockResolvedValue([
 			{
 				databaseName: 'neondb',
-				databaseRole: 'gym_bootstrap',
-				sessionRole: 'gym_bootstrap',
-				databaseMarker: 'nexcode-gym:bootstrap:724fbc40-515c-4a30-a4bb-8a6458a24396',
+				databaseRole: 'akiba_bootstrap',
+				sessionRole: 'akiba_bootstrap',
+				databaseMarker: 'akiba:bootstrap:724fbc40-515c-4a30-a4bb-8a6458a24396',
 				unsafeRole: false,
 				canCreate: false,
 				ownsObjects: false,
@@ -111,7 +111,7 @@ describe('PlatformOwnerBootstrapService', () => {
 			encryptionKeyId: 'local-v1',
 			encryptionVersion: 1,
 			secret: 'JBSWY3DPEHPK3PXP',
-			enrollmentUri: 'otpauth://totp/NEXCODE%20Gym:owner%40example.com',
+			enrollmentUri: 'otpauth://totp/Akiba:owner%40example.com',
 		});
 		totpUpdateMany.mockResolvedValue({ count: 1 });
 		userUpdateMany.mockResolvedValue({ count: 1 });
@@ -144,7 +144,7 @@ describe('PlatformOwnerBootstrapService', () => {
 		expect(permissionCreate).toHaveBeenCalledWith({
 			data: {
 				key: 'platform.dashboard.read',
-				description: 'View the NEXCODE platform administration dashboard.',
+				description: 'View the Akiba platform administration dashboard.',
 			},
 			select: { id: true },
 		});
