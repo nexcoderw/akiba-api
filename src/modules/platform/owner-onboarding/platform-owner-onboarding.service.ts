@@ -25,18 +25,26 @@ import {
 } from './platform-owner-invitation-policy.js';
 import { OWNER_INVITATION_TRANSACTION_OPTIONS } from './platform-owner-onboarding.constants.js';
 
+import { PlatformSessionService } from '../auth/platform-session.service.js';
+import type { PlatformPrincipal } from '../auth/platform-auth.types.js';
+import { PLATFORM_PERMISSION } from '../auth/platform-permission.constants.js';
+
 @Injectable()
 export class PlatformOwnerOnboardingService {
 	constructor(
 		private readonly prisma: PrismaService,
+		private readonly sessions: PlatformSessionService,
 		private readonly audit: PlatformOwnerInvitationAudit,
 	) {}
 
 	async create(
 		context: OwnerInvitationMutationContext,
+		principal: PlatformPrincipal | undefined,
 		organizationId: string,
 		input: CreateOwnerInvitationDto,
 	): Promise<OwnerInvitationResponseDto> {
+		context = Object.freeze({ ...context });
+		await this.sessions.authorize(principal, PLATFORM_PERMISSION.organizationOwnersInvite, context.actorPlatformStaffId);
 		this.audit.assertAvailable();
 		try {
 			return await this.prisma.$transaction(
@@ -86,9 +94,11 @@ export class PlatformOwnerOnboardingService {
 	}
 
 	async list(
+		principal: PlatformPrincipal | undefined,
 		organizationId: string,
 		query: ListOwnerInvitationsQueryDto,
 	): Promise<OwnerInvitationListResponseDto> {
+		await this.sessions.authorize(principal, PLATFORM_PERMISSION.organizationOwnersRead);
 		if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 50) {
 			throw new BadRequestException({
 				code: 'OWNER_INVITATION_PAGE_INVALID',
@@ -147,9 +157,12 @@ export class PlatformOwnerOnboardingService {
 
 	async revoke(
 		context: OwnerInvitationMutationContext,
+		principal: PlatformPrincipal | undefined,
 		organizationId: string,
 		invitationId: string,
 	): Promise<OwnerInvitationResponseDto> {
+		context = Object.freeze({ ...context });
+		await this.sessions.authorize(principal, PLATFORM_PERMISSION.organizationOwnersRevokeInvitation, context.actorPlatformStaffId);
 		this.audit.assertAvailable();
 		try {
 			return await this.prisma.$transaction(
