@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path';
 import { isIP } from 'node:net';
 import {
 	NODE_ENVIRONMENTS,
@@ -188,6 +189,31 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
 	}
 
 	const corsOrigins = parseOrigins(input.CORS_ORIGINS, nodeEnvironment);
+	if (
+		(input.PASSWORD_BLOCKLIST_FILE !== undefined &&
+			typeof input.PASSWORD_BLOCKLIST_FILE !== 'string') ||
+		(input.PASSWORD_BLOCKLIST_SHA256 !== undefined &&
+			typeof input.PASSWORD_BLOCKLIST_SHA256 !== 'string')
+	) {
+		throw new Error('Password blocklist configuration must contain strings.');
+	}
+	const blocklistFile =
+		typeof input.PASSWORD_BLOCKLIST_FILE === 'string' && input.PASSWORD_BLOCKLIST_FILE !== ''
+			? input.PASSWORD_BLOCKLIST_FILE
+			: null;
+	const blocklistDigest =
+		typeof input.PASSWORD_BLOCKLIST_SHA256 === 'string' && input.PASSWORD_BLOCKLIST_SHA256 !== ''
+			? input.PASSWORD_BLOCKLIST_SHA256
+			: null;
+	if (
+		(blocklistFile === null) !== (blocklistDigest === null) ||
+		(blocklistFile !== null && !isAbsolute(blocklistFile)) ||
+		(blocklistDigest !== null && !/^[a-f0-9]{64}$/u.test(blocklistDigest))
+	) {
+		throw new Error(
+			'Configure an absolute PASSWORD_BLOCKLIST_FILE and its PASSWORD_BLOCKLIST_SHA256 together.',
+		);
+	}
 	const apiPublicOrigin = parseOrigin(
 		input.API_PUBLIC_ORIGIN,
 		'API_PUBLIC_ORIGIN',
@@ -426,6 +452,8 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
 	return Object.freeze({
 		NODE_ENV: nodeEnvironment,
 		API_PUBLIC_ORIGIN: apiPublicOrigin,
+		PASSWORD_BLOCKLIST_FILE: blocklistFile,
+		PASSWORD_BLOCKLIST_SHA256: blocklistDigest,
 		HOST: typeof host === 'string' ? host : '127.0.0.1',
 		PORT: parseInteger(input.PORT, 'PORT', DEFAULT_PORT, 1, 65_535),
 		BODY_LIMIT_BYTES: parseInteger(
