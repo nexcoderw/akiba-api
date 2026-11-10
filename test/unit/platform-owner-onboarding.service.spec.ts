@@ -4,7 +4,7 @@ import {
 	OrganizationOwnerInvitationStatus,
 	OrganizationStatus,
 	PrismaService,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 
 import {
 	PlatformOwnerInvitationAudit,
