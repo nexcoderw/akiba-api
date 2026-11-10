@@ -5,7 +5,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { ORGANIZATION_RESERVED_SLUGS } from '../platform-organizations.constants.js';
 
 export class CreateOrganizationDto {
-	@ApiProperty({ example: 'Soho Gym', minLength: 1, maxLength: 160 })
+	@ApiProperty({ example: 'Kimihurura Supplies', minLength: 1, maxLength: 160 })
 	@Transform(({ value }: { value: unknown }) =>
 		typeof value === 'string' ? value.replace(/^[\s\u0085]+|[\s\u0085]+$/gu, '') : value,
 	)
@@ -16,7 +16,7 @@ export class CreateOrganizationDto {
 	@Matches(/[^\s\u0085]/u, { message: 'name must contain meaningful text' })
 	name!: string;
 
-	@ApiProperty({ example: 'soho', minLength: 3, maxLength: 63 })
+	@ApiProperty({ example: 'kimihurura', minLength: 3, maxLength: 63 })
 	@IsString()
 	@MinLength(3)
 	@MaxLength(63)
