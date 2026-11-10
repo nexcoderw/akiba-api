@@ -23,7 +23,8 @@ describe('owner invitation configuration and cryptography', () => {
 	it('validates a separately provisioned worker without HTTP session or TOTP secrets', () => {
 		const input = {
 			...invitationDeliveryInput(),
-			DATABASE_URL: 'postgresql://gym_invitation_worker:fictional@localhost:5432/disposable_gym',
+			DATABASE_URL:
+				'postgresql://akiba_invitation_worker:fictional@localhost:5432/disposable_organization',
 		};
 		const worker = validateOwnerInvitationWorkerEnvironment(input);
 		expect(worker.DATABASE_POOL_MAX).toBeLessThanOrEqual(16);
@@ -39,7 +40,7 @@ describe('owner invitation configuration and cryptography', () => {
 		expect(() =>
 			validateOwnerInvitationWorkerEnvironment({
 				...input,
-				DATABASE_URL: 'postgresql://neondb_owner:fictional@localhost:5432/disposable_gym',
+				DATABASE_URL: 'postgresql://neondb_owner:fictional@localhost:5432/disposable_organization',
 			}),
 		).toThrow('restricted');
 	});
@@ -123,7 +124,7 @@ describe('owner invitation configuration and cryptography', () => {
 		const envelopes = new OwnerInvitationTokenEnvelopeService(config);
 		const snapshot = {
 			token: new OwnerInvitationTokenService(config).generate(),
-			organizationName: 'Soho Gym',
+			organizationName: 'Kimihurura Supplies',
 			recipient: 'owner@example.com',
 			sender: 'onboarding@resend.dev',
 			acceptanceOrigin: 'https://owners.example.invalid',
