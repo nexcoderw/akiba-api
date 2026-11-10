@@ -71,8 +71,6 @@ jobs:
 
       - name: Run offline module integration tests
         working-directory: api
-        env:
-          BOOTSTRAP_POSTGRES_TESTS: '0'
         run: npm run test:integration
 
       - name: Run HTTP contract tests
