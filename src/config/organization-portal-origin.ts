@@ -13,9 +13,14 @@ export function parseOrganizationPortalOriginPolicy(
 	if (!production) {
 		if (input.ORGANIZATION_PORTAL_BASE_DOMAIN !== undefined) {
 			const value = input.ORGANIZATION_PORTAL_BASE_DOMAIN;
-			if (typeof value !== 'string' || !/^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.localhost$/u.test(value) ||
-				input.ORGANIZATION_PORTAL_ORIGIN !== undefined) {
-				throw new Error('ORGANIZATION_PORTAL_BASE_DOMAIN is production-only except explicit .localhost domains.');
+			if (
+				typeof value !== 'string' ||
+				!/^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.localhost$/u.test(value) ||
+				input.ORGANIZATION_PORTAL_ORIGIN !== undefined
+			) {
+				throw new Error(
+					'ORGANIZATION_PORTAL_BASE_DOMAIN is production-only except explicit .localhost domains.',
+				);
 			}
 			return { fixedOrigin: null, baseDomain: value };
 		}
@@ -66,7 +71,8 @@ export function organizationSlugFromPortalOrigin(
 	}
 	if (
 		origin.origin !== value ||
-		(origin.protocol !== 'https:' && !(policy.baseDomain.endsWith('.localhost') && origin.protocol === 'http:')) ||
+		(origin.protocol !== 'https:' &&
+			!(policy.baseDomain.endsWith('.localhost') && origin.protocol === 'http:')) ||
 		(origin.port !== '' && !policy.baseDomain.endsWith('.localhost')) ||
 		origin.username !== '' ||
 		origin.password !== '' ||
