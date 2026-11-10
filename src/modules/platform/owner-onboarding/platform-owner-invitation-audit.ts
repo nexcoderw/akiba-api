@@ -3,7 +3,7 @@ import {
 	OrganizationOwnershipAuditAction,
 	type OrganizationOwnerInvitationStatus,
 	type Prisma,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 
 export interface OwnerInvitationMutationContext {
 	readonly actorPlatformStaffId: string;
