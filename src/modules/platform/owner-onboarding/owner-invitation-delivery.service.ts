@@ -52,7 +52,11 @@ export class OwnerInvitationDeliveryService {
 		invitationId: string,
 	): Promise<OwnerInvitationDeliveryResponseDto> {
 		context = Object.freeze({ ...context });
-		await this.sessions.authorize(principal, PLATFORM_PERMISSION.organizationOwnersSendInvitation, context.actorPlatformStaffId);
+		await this.sessions.authorize(
+			principal,
+			PLATFORM_PERMISSION.organizationOwnersSendInvitation,
+			context.actorPlatformStaffId,
+		);
 		const settings = this.gate.settings();
 		await this.gate.assertDatabase();
 		this.audit.assertAvailable();
