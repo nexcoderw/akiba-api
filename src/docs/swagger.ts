@@ -24,10 +24,10 @@ export function createOpenApiDocument(application: INestApplication): OpenAPIObj
 	});
 	for (const item of Object.values(document.paths)) {
 		for (const method of ['get', 'head', 'post', 'put', 'patch', 'delete', 'options'] as const) {
-			const operation = item?.[method];
+			const operation = item[method];
 			if (operation === undefined) continue;
 			for (const [status, response] of Object.entries(operation.responses)) {
-				if (Number(status) < 400 || '$ref' in response) continue;
+				if (response === undefined || Number(status) < 400 || '$ref' in response) continue;
 				response.content = {
 					'application/problem+json': {
 						schema: { $ref: '#/components/schemas/ApiErrorResponseDto' },
