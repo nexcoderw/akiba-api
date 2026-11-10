@@ -1,7 +1,7 @@
 {
-	"name": "@nexcoderw/gym-api",
+	"name": "@nexcoderw/akiba-api",
 	"version": "0.1.0",
-	"description": "Shared multi-tenant API for NEXCODE Gym Management SaaS",
+	"description": "Akiba multi-tenant inventory SaaS API and security foundation",
 	"author": "NEXCODE LTD",
 	"private": true,
 	"type": "module",
@@ -27,11 +27,7 @@
 		"bootstrap:platform-owner:init": "node dist/cli/platform-owner-bootstrap.js initialize",
 		"bootstrap:platform-owner:activate": "node dist/cli/platform-owner-bootstrap.js activate",
 		"worker:owner-invitations": "OWNER_INVITATION_WORKER_ID=local-owner-invitation-worker node --env-file=.env.local dist/cli/owner-invitation-delivery-worker.js",
-		"worker:owner-invitations:managed": "node dist/cli/owner-invitation-delivery-worker.js",
-		"worker:member-reminders": "node --env-file=.env.local dist/cli/member-reminder-delivery.js",
-		"worker:member-reminders:managed": "node dist/cli/member-reminder-delivery.js",
-		"reconcile:member-reminders": "node --env-file=.env.reminder-reconciler.local dist/cli/member-reminder-reconciler.js",
-		"reconcile:member-reminders:managed": "node dist/cli/member-reminder-reconciler.js"
+		"worker:owner-invitations:managed": "node dist/cli/owner-invitation-delivery-worker.js"
 	},
 	"engines": {
 		"node": "^20.19.0 || ^22.12.0 || >=24.0.0",
@@ -44,16 +40,16 @@
 		"@nestjs/platform-express": "^11.1.6",
 		"@nestjs/swagger": "^11.2.1",
 		"@nestjs/throttler": "^6.4.0",
-		"@nexcoderw/gym-db": "file:../db",
+		"@nexcoderw/akiba-db": "file:../db",
 		"argon2": "^0.44.0",
 		"class-transformer": "^0.5.1",
 		"class-validator": "^0.14.2",
 		"cookie": "^1.0.2",
 		"helmet": "^8.1.0",
 		"otpauth": "^9.5.2",
-		"pdfkit": "0.19.1",
 		"reflect-metadata": "^0.2.2",
-		"rxjs": "^7.8.2"
+		"rxjs": "^7.8.2",
+		"express": "^5.1.0"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.18.0",
@@ -63,7 +59,6 @@
 		"@types/express": "^5.0.0",
 		"@types/jest": "^29.5.14",
 		"@types/node": "^22.10.7",
-		"@types/pdfkit": "0.17.6",
 		"@types/supertest": "^6.0.2",
 		"eslint": "^9.18.0",
 		"eslint-config-prettier": "^10.0.1",
@@ -78,6 +73,11 @@
 		"ts-node": "^10.9.2",
 		"tsconfig-paths": "^4.2.0",
 		"typescript": "^5.9.3",
-		"typescript-eslint": "^8.20.0"
+		"typescript-eslint": "^8.20.0",
+		"jest-util": "^29.7.0"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/nexcoderw/akiba-api.git"
 	}
 }
