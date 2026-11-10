@@ -8,7 +8,7 @@ import {
 	OrganizationStatus,
 	type OrganizationOwnerInvitationDelivery,
 	type Prisma,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from '../../src/config/environment.types.js';
 import { validateEnvironment } from '../../src/config/environment.validation.js';
@@ -164,7 +164,7 @@ export function createInvitationDeliveryDatabaseFixture() {
 					invitation.acceptedAt === null &&
 					(invitation.organization.status === OrganizationStatus.PENDING ||
 						invitation.organization.status === OrganizationStatus.ACTIVE);
-				return Promise.resolve(valid ? [{ organizationName: 'Soho Gym' }] : []);
+				return Promise.resolve(valid ? [{ organizationName: 'Kimihurura Supplies' }] : []);
 			}
 			if (text.includes('AS "ownerInvitationId"')) {
 				return Promise.resolve(
