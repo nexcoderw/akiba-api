@@ -1,3 +1,4 @@
+import { accountCanAuthenticate } from '../../../common/identity/account-state.policy.js';
 import { randomInt, randomUUID } from 'node:crypto';
 import { HttpException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -47,7 +48,7 @@ export class PlatformEmailOtpService {
 								status: true,
 								email: true,
 								emailVerifiedAt: true,
-								passwordCredential: { select: { passwordChangedAt: true } },
+								passwordCredential: { select: { passwordChangedAt: true, disabledAt: true } },
 							},
 						},
 						roles: {
@@ -70,9 +71,11 @@ export class PlatformEmailOtpService {
 			challenge.expiresAt <= now ||
 			challenge.failedAttempts >= challenge.maxAttempts ||
 			challenge.platformStaff.status !== PlatformStaffStatus.ACTIVE ||
-			challenge.platformStaff.user.status !== UserStatus.ACTIVE ||
-			challenge.platformStaff.user.emailVerifiedAt === null ||
-			challenge.platformStaff.user.passwordCredential === null ||
+			!accountCanAuthenticate(
+				challenge.platformStaff.user.status,
+				challenge.platformStaff.user.emailVerifiedAt,
+			) ||
+			challenge.platformStaff.user.passwordCredential?.disabledAt !== null ||
 			challenge.platformStaff.user.passwordCredential.passwordChangedAt > challenge.createdAt ||
 			(!isPlatformSuperadmin(challenge.platformStaff.roles) &&
 				!challenge.platformStaff.roles.some(
@@ -117,7 +120,10 @@ export class PlatformEmailOtpService {
 						status: UserStatus.ACTIVE,
 						email: recipient,
 						emailVerifiedAt: { not: null },
-						passwordCredential: { passwordChangedAt: { lte: challenge.createdAt } },
+						passwordCredential: {
+							passwordChangedAt: { lte: challenge.createdAt },
+							disabledAt: null,
+						},
 					},
 				},
 			},
