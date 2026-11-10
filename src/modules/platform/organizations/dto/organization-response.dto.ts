@@ -1,14 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { OrganizationStatus } from '@nexcoderw/gym-db';
+import { OrganizationStatus } from '@nexcoderw/akiba-db';
 
 export class OrganizationResponseDto {
 	@ApiProperty({ format: 'uuid' })
 	id!: string;
 
-	@ApiProperty({ example: 'Soho Gym', maxLength: 160 })
+	@ApiProperty({ example: 'Kimihurura Supplies', maxLength: 160 })
 	name!: string;
 
-	@ApiProperty({ example: 'soho', minLength: 3, maxLength: 63 })
+	@ApiProperty({ example: 'kimihurura', minLength: 3, maxLength: 63 })
 	slug!: string;
 
 	@ApiProperty({ enum: OrganizationStatus })
