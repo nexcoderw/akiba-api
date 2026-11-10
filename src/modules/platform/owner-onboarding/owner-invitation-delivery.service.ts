@@ -30,10 +30,15 @@ import {
 	ownerInvitationOrganizationNotFound,
 } from './platform-owner-invitation-policy.js';
 
+import { PlatformSessionService } from '../auth/platform-session.service.js';
+import type { PlatformPrincipal } from '../auth/platform-auth.types.js';
+import { PLATFORM_PERMISSION } from '../auth/platform-permission.constants.js';
+
 @Injectable()
 export class OwnerInvitationDeliveryService {
 	constructor(
 		private readonly prisma: PrismaService,
+		private readonly sessions: PlatformSessionService,
 		private readonly gate: OwnerInvitationDeliveryGate,
 		private readonly tokens: OwnerInvitationTokenService,
 		private readonly envelopes: OwnerInvitationTokenEnvelopeService,
@@ -42,9 +47,12 @@ export class OwnerInvitationDeliveryService {
 
 	async queue(
 		context: OwnerInvitationMutationContext,
+		principal: PlatformPrincipal | undefined,
 		organizationId: string,
 		invitationId: string,
 	): Promise<OwnerInvitationDeliveryResponseDto> {
+		context = Object.freeze({ ...context });
+		await this.sessions.authorize(principal, PLATFORM_PERMISSION.organizationOwnersSendInvitation, context.actorPlatformStaffId);
 		const settings = this.gate.settings();
 		await this.gate.assertDatabase();
 		this.audit.assertAvailable();
