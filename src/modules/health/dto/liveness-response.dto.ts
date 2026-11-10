@@ -4,7 +4,7 @@ export class LivenessResponseDto {
 	@ApiProperty({ example: 'ok', enum: ['ok'] })
 	status!: 'ok';
 
-	@ApiProperty({ example: 'nexcode-gym-api' })
+	@ApiProperty({ example: 'akiba-api' })
 	service!: string;
 
 	@ApiProperty({ example: '0.1.0' })
