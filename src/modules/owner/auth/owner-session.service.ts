@@ -1,3 +1,4 @@
+import { accountCanAuthenticate } from '../../../common/identity/account-state.policy.js';
 import { randomInt } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -8,7 +9,6 @@ import {
 	OwnerSessionAssurance,
 	Prisma,
 	PrismaService,
-	UserStatus,
 } from '@nexcoderw/akiba-db';
 
 import { databaseErrorCode } from '../../../common/errors/database-error-code.js';
@@ -50,21 +50,36 @@ export class OwnerSessionService {
 	): Promise<{ readonly token: string; readonly expiresAt: Date }> {
 		const token = this.tokens.create();
 		const expiresAt = new Date(now.getTime() + this.sessionLifetimeMilliseconds);
-		await this.prisma.ownerSession.create({
-			data: {
-				userId,
-				tokenDigest: this.tokens.sessionDigest(token),
-				assurance,
-				authenticatedAt: now,
-				mfaVerifiedAt: assurance === OwnerSessionAssurance.AAL2 ? now : null,
-				createdAt: now,
-				lastActivityAt: now,
-				idleExpiresAt: new Date(
-					Math.min(expiresAt.getTime(), now.getTime() + this.idleLifetimeMilliseconds),
-				),
-				absoluteExpiresAt: expiresAt,
+		await this.prisma.$transaction(
+			async (transaction) => {
+				// Recheck after password work and lock both rows against credential/account replacement.
+				const eligible = await transaction.$queryRaw<{ id: string }[]>`
+				SELECT account.id FROM public.users AS account
+				JOIN public.password_credentials AS credential ON credential.user_id = account.id
+				WHERE account.id = ${userId}::uuid AND account.status = 'active'
+				AND account.email_verified_at IS NOT NULL AND credential.disabled_at IS NULL
+				AND credential.password_changed_at <= ${now}
+				FOR SHARE OF account, credential
+			`;
+				if (eligible.length !== 1) throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidSession);
+				await transaction.ownerSession.create({
+					data: {
+						userId,
+						tokenDigest: this.tokens.sessionDigest(token),
+						assurance,
+						authenticatedAt: now,
+						mfaVerifiedAt: assurance === OwnerSessionAssurance.AAL2 ? now : null,
+						createdAt: now,
+						lastActivityAt: now,
+						idleExpiresAt: new Date(
+							Math.min(expiresAt.getTime(), now.getTime() + this.idleLifetimeMilliseconds),
+						),
+						absoluteExpiresAt: expiresAt,
+					},
+				});
 			},
-		});
+			{ maxWait: this.transactionMaxWaitMilliseconds, timeout: TRANSACTION_TIMEOUT_MS },
+		);
 		return { token, expiresAt };
 	}
 
@@ -140,7 +155,7 @@ export class OwnerSessionService {
 								email: true,
 								status: true,
 								emailVerifiedAt: true,
-								passwordCredential: { select: { passwordChangedAt: true } },
+								passwordCredential: { select: { passwordChangedAt: true, disabledAt: true } },
 								organizationMemberships: {
 									where: { status: OrganizationMembershipStatus.ACTIVE },
 									select: {
@@ -160,9 +175,8 @@ export class OwnerSessionService {
 					session.revokedAt !== null ||
 					session.idleExpiresAt <= now ||
 					session.absoluteExpiresAt <= now ||
-					session.user.status !== UserStatus.ACTIVE ||
-					session.user.emailVerifiedAt === null ||
-					session.user.passwordCredential === null ||
+					!accountCanAuthenticate(session.user.status, session.user.emailVerifiedAt) ||
+					session.user.passwordCredential?.disabledAt !== null ||
 					session.user.passwordCredential.passwordChangedAt > session.authenticatedAt;
 				if (invalid) {
 					if (session.revokedAt === null) {
