@@ -1,6 +1,6 @@
 import { HttpException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService, type Prisma } from '@nexcoderw/gym-db';
+import { PrismaService, type Prisma } from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
 import type { OwnerInvitationDeliveryEnvironment } from '../../../config/owner-invitation-delivery.environment.js';
