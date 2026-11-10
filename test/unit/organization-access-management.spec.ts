@@ -95,26 +95,18 @@ describe('internal organization access management', () => {
 				permissionKeys: [ORGANIZATION_PERMISSION.membersRead],
 			}),
 		).resolves.toBe('66666666-6666-4666-8666-666666666666');
-		expect(roleCreate).toHaveBeenCalledWith({
-			data: expect.objectContaining({
-				organizationId: ORGANIZATION,
-				isSystem: false,
-				isActive: true,
-			}),
+		expect(roleCreate.mock.calls[0]?.[0]).toMatchObject({
+			data: { organizationId: ORGANIZATION, isSystem: false, isActive: true },
 		});
-		expect(permissionCreate).toHaveBeenCalledWith({
-			data: [
-				expect.objectContaining({
-					organizationId: ORGANIZATION,
-				}),
-			],
+		expect(permissionCreate.mock.calls[0]?.[0]).toMatchObject({
+			data: [{ organizationId: ORGANIZATION }],
 		});
-		expect(auditCreate).toHaveBeenCalledWith({
-			data: expect.objectContaining({
+		expect(auditCreate.mock.calls[0]?.[0]).toMatchObject({
+			data: {
 				organizationId: ORGANIZATION,
 				actorMembershipId: MEMBERSHIP,
 				action: 'role_created',
-			}),
+			},
 		});
 	});
 
