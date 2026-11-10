@@ -3,16 +3,24 @@ import { PlatformStaffStatus, Prisma, PrismaService } from '@nexcoderw/akiba-db'
 
 import type { PlatformDashboardSummaryDto } from './dto/platform-dashboard-summary.dto.js';
 
+import { PlatformSessionService } from '../auth/platform-session.service.js';
+import type { PlatformPrincipal } from '../auth/platform-auth.types.js';
+import { PLATFORM_PERMISSION } from '../auth/platform-permission.constants.js';
+
 @Injectable()
 export class PlatformDashboardService {
-	constructor(private readonly prisma: PrismaService) {}
+	constructor(
+		private readonly prisma: PrismaService,
+		private readonly sessions: PlatformSessionService,
+	) {}
 
 	/**
 	 * Reads four aggregates from one repeatable-read snapshot on the existing database client.
 	 * generatedAt describes response generation, not the exact snapshot acquisition time.
 	 * Persistence failures propagate to the centralized safe HTTP exception boundary.
 	 */
-	async getSummary(): Promise<PlatformDashboardSummaryDto> {
+	async getSummary(principal: PlatformPrincipal | undefined): Promise<PlatformDashboardSummaryDto> {
+		await this.sessions.authorize(principal, PLATFORM_PERMISSION.dashboardRead);
 		const staffGroupByArgs = {
 			by: ['status'],
 			orderBy: { status: 'asc' },
