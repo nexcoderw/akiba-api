@@ -119,6 +119,8 @@ describe('platform dashboard HTTP API (real session and permission guards)', () 
 		'idle-expired',
 		'revoked',
 		'suspended-user',
+		'disabled-user',
+		'disabled-credential',
 		'pending-staff',
 		'suspended-staff',
 		'revoked-staff',
@@ -136,6 +138,12 @@ describe('platform dashboard HTTP API (real session and permission guards)', () 
 				break;
 			case 'revoked':
 				session.revokedAt = past;
+				break;
+			case 'disabled-user':
+				session.platformStaff.user.status = UserStatus.DISABLED;
+				break;
+			case 'disabled-credential':
+				session.platformStaff.user.passwordCredential.disabledAt = past;
 				break;
 			case 'suspended-user':
 				session.platformStaff.user.status = UserStatus.SUSPENDED;
@@ -302,7 +310,7 @@ interface SessionRecord {
 			displayName: string;
 			status: UserStatus;
 			emailVerifiedAt: Date | null;
-			passwordCredential: { passwordChangedAt: Date };
+			passwordCredential: { passwordChangedAt: Date; disabledAt: Date | null };
 		};
 		roles: {
 			platformRole: {
@@ -331,7 +339,7 @@ function createSession(): SessionRecord {
 				displayName: 'Fictional Platform Auditor',
 				status: UserStatus.ACTIVE,
 				emailVerifiedAt: new Date(now - 86_400_000),
-				passwordCredential: { passwordChangedAt: new Date(now - 86_400_000) },
+				passwordCredential: { passwordChangedAt: new Date(now - 86_400_000), disabledAt: null },
 			},
 			roles: [
 				{
