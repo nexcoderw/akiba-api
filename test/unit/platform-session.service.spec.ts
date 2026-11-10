@@ -1,7 +1,7 @@
 import { jest } from '@jest/globals';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { PlatformStaffStatus, Prisma, PrismaService, UserStatus } from '@nexcoderw/gym-db';
+import { PlatformStaffStatus, Prisma, PrismaService, UserStatus } from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from '../../src/config/environment.types.js';
 import { validateEnvironment } from '../../src/config/environment.validation.js';
@@ -288,7 +288,7 @@ function createSession(
 			user: {
 				id: 'user-id',
 				email: 'admin@example.com',
-				displayName: 'NEXCODE Administrator',
+				displayName: 'Akiba Administrator',
 				status: UserStatus.ACTIVE,
 				emailVerifiedAt: new Date('2029-01-01T00:00:00.000Z'),
 				passwordCredential: { passwordChangedAt: new Date('2029-01-01T00:00:00.000Z') },
