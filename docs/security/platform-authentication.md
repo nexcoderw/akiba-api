@@ -2,14 +2,13 @@
 
 ## Implemented flow
 
-The browser at `admin.gym.rw` calls `api.gym.rw` directly with credentials enabled. Password login
+The browser at `admin.akiba.com` calls `api.akiba.com` directly with credentials enabled. Password login
 normalizes email, performs an Argon2id comparison even for unknown identities, and requires an active,
 email-verified user with an active `PlatformStaff` assignment. Successful password verification creates
 only a five-minute MFA challenge; it never creates an administrative session.
 
 Accepted password hashes are Argon2id v19 with 64–256 MiB memory, three to six iterations, and one to
-four lanes. Password request bodies are capped at 1,024 characters. Initial password provisioning is
-available only through the operator-controlled first-owner CLI; it is not an HTTP capability.
+four lanes. Password request bodies are capped at 1,024 characters. The inherited first-owner CLI is not an HTTP capability and remains blocked under the current DB policy.
 
 MFA verification accepts either a confirmed TOTP factor or one unused recovery code. AES-256-GCM
 authenticated decryption uses the credential's stored key identifier and version. TOTP acceptance,
@@ -18,12 +17,12 @@ transaction. Conditional updates prevent challenge, TOTP-step, and recovery-code
 
 The session endpoint checks absolute expiry, idle expiry, revocation, password-change time, active user
 and staff status, and current role-permission relationships. A staff identity with no effective
-permission is denied. Role names never grant implicit authority. Logout digests the presented cookie,
+permission is denied. The trusted system role `platform.owner` with `isSystem=true` grants the declared platform permission set; ordinary role names alone grant no authority. Logout digests the presented cookie,
 revokes only the matching record, and clears the cookie with the original attributes.
 
 ## Browser and CSRF model
 
-Production sessions use `__Host-nexcode-platform-session` with `Secure`, `HttpOnly`,
+Production sessions use `__Host-akiba-platform-session` with `Secure`, `HttpOnly`,
 `SameSite=Strict`, `Path=/`, and no `Domain`. Consequently, sibling subdomains cannot receive or set
 that cookie. The API requires the exact configured `Origin` on login, MFA verification, and logout.
 Login returns a random CSRF value and sets the same value in an API-host-only readable cookie; the
@@ -36,7 +35,7 @@ then a reverse proxy may make the limiter deliberately more restrictive, never e
 
 A future Next.js Backend-for-Frontend would terminate the browser session on the admin origin and use
 a separate server-to-server credential to call the API. That architecture must not forward this API
-cookie or silently broaden it to `.gym.rw`.
+cookie or silently broaden it to `.akiba.com`.
 
 ## Keys and rotation
 
@@ -52,31 +51,16 @@ Git, logs, or examples.
 
 ## Release and deployment prerequisites
 
-1. Verify that the immutable `@nexcoderw/gym-db` package contains the Step 4 Prisma client and public
-   exports. The repository currently says `0.1.1` but has no matching release tag.
-2. Review and deploy `20261012235203_platform_auth_persistence` through the database runbook before the
-   API release. The API never executes migrations.
-3. Install the exact approved database version and regenerate `package-lock.json` through npm.
-4. Supply production database, pepper, dummy Argon2id hash, TOTP keyring, exact admin Origin, and secure
-   cookie settings through managed configuration.
-5. Keep one API replica. The current account limiter is in process; multiple replicas are blocked from
-   production readiness until a distributed limiter is implemented.
-6. Provision and enroll the first administrator through the reviewed two-stage CLI. There is no
-   sign-up, bootstrap, password-reset, invitation, or MFA-enrollment endpoint.
+The verified local DB package is 0.2.0 at `71096ae94640e8227623d700e5c2fcb9a12007fb`.
+Registry artifact availability is unverified; build the reviewed sibling source and regenerate the API
+lockfile through human npm execution. Database migrations remain exclusively in akiba-db and follow
+its guarded development/production workflow; the API never migrates.
 
-The CLI uses an exact configured database fingerprint and a PostgreSQL transaction-scoped advisory
-lock. Initialization creates only pending records, the explicit `platform.owner` role, and the
-allowlisted `platform.dashboard.read` permission. Activation requires a valid fresh TOTP code plus an
-operator attestation that an independent mailbox challenge was completed. Recovery codes are shown
-once and stored only as keyed digests. See the
-[platform owner bootstrap runbook](../runbooks/platform-owner-bootstrap.md).
+Keep bootstrap and invitation-delivery gates off. The retained bootstrap CLI's restricted-role/marker
+assumptions conflict with the current managed-owner/two-branch policy. No additional persistent test
+database or custom role is authorized. See the [blocked bootstrap runbook](../runbooks/platform-owner-bootstrap.md).
 
-## Local development
-
-Use an isolated disposable database and fictional administrator. Local HTTP deliberately uses
-`nexcode-platform-session` and `nexcode-platform-csrf` without `Secure`; production validation always
-requires secure `__Host-` cookies and HTTPS Origin. Never use production identities or keys locally.
-
-Operational security messages contain event names and internal staff/challenge identifiers only. They
-exclude email, passwords, tokens, MFA values, cookies, decrypted secrets, recovery codes, and keys.
-They are not a substitute for the future tamper-resistant privileged audit system.
+Supply independent production secrets, HTTPS origins and secure cookie settings through managed
+configuration. Review the [security checklist](security-checklist.md): administrative database
+privileges, tenant isolation, shared browser boundaries, distributed throttling, security audits and
+human compilation/test evidence still block production approval. No deployment is certified here.
