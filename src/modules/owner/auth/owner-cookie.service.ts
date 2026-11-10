@@ -21,14 +21,22 @@ export class OwnerCookieService {
 	private readonly csrfCookieName: string;
 
 	constructor(config: ConfigService<EnvironmentVariables, true>) {
-		this.bindingKey = Buffer.from(config.get('OWNER_AUTH_TOKEN_PEPPER', { infer: true }), 'base64');
+		const bindingKey = config.get('OWNER_AUTH_TOKEN_PEPPER', { infer: true });
+		if (typeof bindingKey !== 'string') {
+			throw new Error('The owner authentication token pepper must be a validated string.');
+		}
+		this.bindingKey = Buffer.from(bindingKey, 'base64');
 		this.secure = config.get('OWNER_AUTH_COOKIE_SECURE', { infer: true });
 		this.sessionCookieName = this.secure ? OWNER_SESSION_COOKIE : LOCAL_OWNER_SESSION_COOKIE;
 		this.csrfCookieName = this.secure ? OWNER_CSRF_COOKIE : LOCAL_OWNER_CSRF_COOKIE;
 	}
 
 	readSession(request: Request): string | undefined {
-		return openOwnerSession(this.read(request, this.sessionCookieName), request.headers.origin, this.bindingKey);
+		return openOwnerSession(
+			this.read(request, this.sessionCookieName),
+			request.headers.origin,
+			this.bindingKey,
+		);
 	}
 
 	readCsrf(request: Request): string | undefined {
