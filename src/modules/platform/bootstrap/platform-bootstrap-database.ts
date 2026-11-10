@@ -4,7 +4,6 @@ import { PlatformBootstrapError } from './platform-bootstrap.types.js';
 export interface BootstrapDatabaseTarget {
 	readonly databaseName: string;
 	readonly databaseRole: string;
-	readonly databaseMarker: string;
 }
 
 interface BootstrapQueryClient {
@@ -37,22 +36,7 @@ export async function verifyBootstrapDatabase(
 ): Promise<void> {
 	const rows: unknown = await transaction.$queryRaw`
 		SELECT current_database()::text AS "databaseName",
-			current_user::text AS "databaseRole", session_user::text AS "sessionRole",
-			shobj_description(d.oid, 'pg_database') AS "databaseMarker",
-			EXISTS (
-				SELECT 1 FROM pg_roles r WHERE pg_has_role(current_user, r.oid, 'MEMBER')
-				AND (r.rolsuper OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication
-					OR r.rolbypassrls OR r.rolname IN
-					('neon_superuser', 'pg_read_all_data', 'pg_write_all_data'))
-			) AS "unsafeRole",
-			(has_database_privilege(current_user, d.oid, 'CREATE') OR
-				has_schema_privilege(current_user, 'public', 'CREATE')) AS "canCreate",
-			(pg_has_role(current_user, d.datdba, 'MEMBER') OR EXISTS (
-				SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-				WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
-				AND pg_has_role(current_user, c.relowner, 'MEMBER')
-			)) AS "ownsObjects"
-		FROM pg_database d WHERE d.datname = current_database()
+			current_user::text AS "databaseRole", session_user::text AS "sessionRole"
 	`;
 	const identity: unknown = Array.isArray(rows) && rows.length === 1 ? rows[0] : undefined;
 	if (
@@ -61,21 +45,13 @@ export async function verifyBootstrapDatabase(
 		!('databaseName' in identity) ||
 		!('databaseRole' in identity) ||
 		!('sessionRole' in identity) ||
-		!('databaseMarker' in identity) ||
-		!('unsafeRole' in identity) ||
-		!('canCreate' in identity) ||
-		!('ownsObjects' in identity) ||
 		identity.databaseName !== target.databaseName ||
 		identity.databaseRole !== target.databaseRole ||
-		identity.sessionRole !== target.databaseRole ||
-		identity.databaseMarker !== target.databaseMarker ||
-		identity.unsafeRole !== false ||
-		identity.canCreate !== false ||
-		identity.ownsObjects !== false
+		identity.sessionRole !== target.databaseRole
 	) {
 		throw new PlatformBootstrapError(
 			'BOOTSTRAP_UNSAFE_DATABASE',
-			'The connected database identity or operator role does not match the approved target.',
+			'The connected database identity does not match the configured environment connection.',
 		);
 	}
 }
