@@ -29,7 +29,7 @@ export class OwnerInvitationPreviewController {
 	@ApiOperation({
 		summary: 'Preview a sent owner invitation without authenticating its recipient',
 		description:
-			'Bounded opaque token in POST body only. Returns the gym name, never recipient/account details or cookies. Invalid, expired, revoked, accepted and ineligible invitations share one invalid response. No account, membership, enrollment proof or session is created. Disabled until database and acceptance-destination review.',
+			'Bounded opaque token in POST body only. Returns the organization name, never recipient/account details or cookies. Invalid, expired, revoked, accepted and ineligible invitations share one invalid response. No account, membership, enrollment proof or session is created. Disabled until database and acceptance-destination review.',
 	})
 	@ApiOkResponse({ type: OwnerInvitationPreviewResponseDto })
 	@ApiBadRequestResponse({ type: ApiErrorResponseDto })
