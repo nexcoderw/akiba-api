@@ -1,6 +1,8 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { PlatformStaffStatus, PrismaService, UserStatus } from '@nexcoderw/akiba-db';
 
+import { DatabaseIntegrationModule } from '../../src/infrastructure/database/database-integration.module.js';
+import { OfflineDatabaseModule } from '../fixtures/offline-database.module.js';
 import { AppModule } from '../../src/app.module.js';
 import { PlatformPermissionGuard } from '../../src/modules/platform/auth/platform-permission.guard.js';
 import { PlatformSessionGuard } from '../../src/modules/platform/auth/platform-session.guard.js';
@@ -14,6 +16,8 @@ describe('PlatformDashboardModule adapter integration (no PostgreSQL)', () => {
 
 	beforeAll(async () => {
 		module = await Test.createTestingModule({ imports: [AppModule] })
+			.overrideModule(DatabaseIntegrationModule)
+			.useModule(OfflineDatabaseModule)
 			.overrideProvider(PrismaService)
 			.useValue(database.prisma)
 			.compile();
