@@ -11,6 +11,12 @@ import {
 	OWNER_CSRF_COOKIE,
 	OWNER_SESSION_COOKIE,
 } from '../../src/modules/owner/auth/owner-auth.constants.js';
+import { TenantTransactionService } from '@nexcoderw/akiba-db';
+import { OrganizationRoutingService } from '../../src/modules/owner/auth/organization-routing.service.js';
+import { sealOwnerSession } from '../../src/modules/owner/auth/owner-session-cookie.js';
+import { OrganizationTenantGuard } from '../../src/modules/owner/tenant/organization-tenant.guard.js';
+import { TenantAuthorizationService } from '../../src/modules/owner/tenant/tenant-authorization.service.js';
+import { TenantPortalService } from '../../src/modules/owner/tenant/tenant-portal.service.js';
 import { OwnerCookieService } from '../../src/modules/owner/auth/owner-cookie.service.js';
 import { OwnerOriginCsrfGuard } from '../../src/modules/owner/auth/owner-origin-csrf.guard.js';
 import { OwnerSessionGuard } from '../../src/modules/owner/auth/owner-session.guard.js';
@@ -39,11 +45,20 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 			['ORGANIZATION_PORTAL_ORIGIN', null],
 			['ORGANIZATION_PORTAL_BASE_DOMAIN', 'akiba.com'],
 			['OWNER_AUTH_COOKIE_SECURE', true],
+			['NODE_ENV', 'test'],
+			['API_PUBLIC_ORIGIN', 'http://localhost:3000'],
+			['OWNER_AUTH_TOKEN_PEPPER', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='],
+			['CORS_ORIGINS', [SOHO_ORIGIN, 'https://diamond-supplies.akiba.com']],
 		]);
 		const module = await Test.createTestingModule({
 			controllers: [OwnerEnrollmentController, OwnerPortalController],
 			providers: [
 				OwnerCookieService,
+				OrganizationRoutingService,
+				OrganizationTenantGuard,
+				TenantAuthorizationService,
+				TenantPortalService,
+				{ provide: TenantTransactionService, useValue: { run: jest.fn() } },
 				OwnerEnrollmentSessionGuard,
 				OwnerOriginCsrfGuard,
 				OwnerSessionGuard,
@@ -158,14 +173,14 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 			.get(`/api/v1/owner/organizations/${ORGANIZATION_ID}/dashboard`)
 			.set('Origin', SOHO_ORIGIN)
 			.set('Cookie', sessionCookie())
-			.expect(401);
+			.expect(404);
 	});
 
 	function acceptanceRequest(origin = SOHO_ORIGIN): request.Test {
 		return request(app().getHttpServer())
 			.post('/api/v1/owner-enrollment/acceptances')
 			.set('Origin', origin)
-			.set('Cookie', `${sessionCookie()}; ${csrfCookie()}`)
+			.set('Cookie', `${sessionCookie(origin)}; ${csrfCookie()}`)
 			.set('x-owner-csrf-token', CSRF_TOKEN)
 			.send({ challengeToken: CHALLENGE_TOKEN });
 	}
@@ -175,8 +190,8 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 		return application;
 	}
 
-	function sessionCookie(): string {
-		return `${OWNER_SESSION_COOKIE}=${SESSION_TOKEN}`;
+	function sessionCookie(origin = SOHO_ORIGIN): string {
+		return `${OWNER_SESSION_COOKIE}=${sealOwnerSession(SESSION_TOKEN, origin, Buffer.alloc(32))}`;
 	}
 
 	function csrfCookie(): string {
