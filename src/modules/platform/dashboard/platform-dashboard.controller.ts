@@ -32,7 +32,7 @@ export class PlatformDashboardController {
 	@ApiOperation({
 		summary: 'Read the platform administration dashboard summary',
 		description:
-			'Requires a valid MFA-authenticated platform session and the live platform.dashboard.read permission. Returns one consistent snapshot of global identity accounts, platform staff assignment statuses, roles, and registered permissions. Counts do not represent gym members, logged-in administrators, or fully authorized users. No gym, subscription, payment, or revenue metrics exist in this response. Tenant identifiers and client-supplied roles grant no access.',
+			'Requires a valid MFA-authenticated platform session and the live platform.dashboard.read permission. Returns one consistent snapshot of global identity accounts, platform staff assignment statuses, roles, and registered permissions. Counts do not represent organization members, logged-in administrators, or fully authorized users. No organization, subscription, payment, or revenue metrics exist in this response. Tenant identifiers and client-supplied roles grant no access.',
 	})
 	@ApiOkResponse({
 		description: 'Aggregate-only platform statistics. Example counts are fictional.',
