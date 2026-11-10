@@ -18,7 +18,7 @@ import {
 	ApiTags,
 	ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { OrganizationStatus } from '@nexcoderw/gym-db';
+import { OrganizationStatus } from '@nexcoderw/akiba-db';
 
 import { ApiErrorResponseDto } from '../../../common/dto/api-error-response.dto.js';
 import { OwnerOriginCsrfGuard } from '../auth/owner-origin-csrf.guard.js';
@@ -34,9 +34,9 @@ export class OwnerPortalController {
 	@Get(':organizationId/dashboard')
 	@Header('Cache-Control', 'no-store')
 	@ApiOperation({
-		summary: 'Read the owner dashboard identity for one active organization',
+		summary: 'Read authorized organization portal identity',
 		description:
-			'Requires the current live ACTIVE membership, exact organization-scoped owner role, and ACTIVE organization. A valid global session alone grants no tenant access.',
+			'Requires a live ACTIVE membership and organization-scoped owner role. ACTIVE and PENDING organizations may read identity; PENDING status grants no operational access. A global session alone grants no tenant access.',
 	})
 	@ApiOkResponse({ type: OwnerDashboardResponseDto })
 	@ApiUnauthorizedResponse({ type: ApiErrorResponseDto })
