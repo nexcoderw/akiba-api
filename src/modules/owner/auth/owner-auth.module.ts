@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { PlatformAuthModule } from '../../platform/auth/platform-auth.module.js';
+import { OrganizationRoutingService } from './organization-routing.service.js';
 import { OwnerAuthController } from './owner-auth.controller.js';
 import { OwnerCookieService } from './owner-cookie.service.js';
 import { OwnerLoginAttemptService } from './owner-login-attempt.service.js';
@@ -14,6 +15,7 @@ import { OwnerTokenService } from './owner-token.service.js';
 	imports: [PlatformAuthModule],
 	controllers: [OwnerAuthController],
 	providers: [
+		OrganizationRoutingService,
 		OwnerCookieService,
 		OwnerLoginAttemptService,
 		OwnerLoginService,
@@ -23,6 +25,7 @@ import { OwnerTokenService } from './owner-token.service.js';
 		OwnerTokenService,
 	],
 	exports: [
+		OrganizationRoutingService,
 		OwnerCookieService,
 		OwnerOriginCsrfGuard,
 		OwnerSessionGuard,
