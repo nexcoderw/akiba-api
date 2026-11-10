@@ -1,5 +1,5 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import { PrismaService } from '@nexcoderw/gym-db';
+import { PrismaService } from '@nexcoderw/akiba-db';
 
 import { AppModule } from '../../src/app.module.js';
 import {
@@ -33,7 +33,7 @@ describe('organization module integration (adapter fake; no live PostgreSQL)', (
 	it('resolves the registered controller and explicit read contract', async () => {
 		const controller = module.get(PlatformOrganizationsController);
 		expect(await controller.list({ limit: 20 })).toMatchObject({
-			items: [{ id: ORGANIZATION_ID, name: 'Soho Gym' }],
+			items: [{ id: ORGANIZATION_ID, name: 'Kimihurura Supplies' }],
 			nextCursor: null,
 		});
 	});
@@ -45,7 +45,7 @@ describe('organization module integration (adapter fake; no live PostgreSQL)', (
 					actorPlatformStaffId: '33333333-3333-4333-8333-333333333333',
 					requestId: 'fictional-request',
 				},
-				{ name: 'Soho Gym', slug: 'soho' },
+				{ name: 'Kimihurura Supplies', slug: 'kimihurura' },
 			),
 		).resolves.toMatchObject({ id: ORGANIZATION_ID });
 		expect(database.auditCreate).toHaveBeenCalledWith({
@@ -59,7 +59,7 @@ describe('organization module integration (adapter fake; no live PostgreSQL)', (
 				resultingStatus: 'PENDING',
 				changedFields: ['name', 'slug', 'status'],
 				previousName: null,
-				resultingName: 'Soho Gym',
+				resultingName: 'Kimihurura Supplies',
 			},
 			select: { id: true },
 		});
@@ -73,7 +73,7 @@ describe('organization module integration (adapter fake; no live PostgreSQL)', (
 					actorPlatformStaffId: '33333333-3333-4333-8333-333333333333',
 					requestId: 'fictional-request',
 				},
-				{ name: 'Soho Gym', slug: 'soho' },
+				{ name: 'Kimihurura Supplies', slug: 'kimihurura' },
 			),
 		).rejects.toMatchObject({
 			status: 503,
