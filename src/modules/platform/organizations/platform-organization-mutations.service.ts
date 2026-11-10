@@ -39,7 +39,11 @@ export class PlatformOrganizationMutationsService {
 		input: CreateOrganizationDto,
 	): Promise<OrganizationResponseDto> {
 		context = Object.freeze({ ...context });
-		await this.sessions.authorize(principal, PLATFORM_PERMISSION.organizationsCreate, context.actorPlatformStaffId);
+		await this.sessions.authorize(
+			principal,
+			PLATFORM_PERMISSION.organizationsCreate,
+			context.actorPlatformStaffId,
+		);
 		this.audit.assertAvailable();
 		try {
 			return await this.prisma.$transaction(async (transaction) => {
@@ -93,13 +97,14 @@ export class PlatformOrganizationMutationsService {
 		command: { readonly name: string } | { readonly action: OrganizationLifecycleAction },
 	): Promise<OrganizationResponseDto> {
 		context = Object.freeze({ ...context });
-		const permission = 'name' in command
-			? PLATFORM_PERMISSION.organizationsUpdate
-			: {
-				activation: PLATFORM_PERMISSION.organizationsActivate,
-				suspension: PLATFORM_PERMISSION.organizationsSuspend,
-				archival: PLATFORM_PERMISSION.organizationsArchive,
-			}[command.action];
+		const permission =
+			'name' in command
+				? PLATFORM_PERMISSION.organizationsUpdate
+				: {
+						activation: PLATFORM_PERMISSION.organizationsActivate,
+						suspension: PLATFORM_PERMISSION.organizationsSuspend,
+						archival: PLATFORM_PERMISSION.organizationsArchive,
+					}[command.action];
 		await this.sessions.authorize(principal, permission, context.actorPlatformStaffId);
 		this.audit.assertAvailable();
 		try {
