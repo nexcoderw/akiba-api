@@ -11,7 +11,7 @@ describe('Resend owner invitation adapter (fake transport only)', () => {
 	const adapter = new ResendOwnerInvitationEmailService(config);
 	const snapshot = {
 		token: new OwnerInvitationTokenService(config).generate(),
-		organizationName: '<Soho & Gym>',
+		organizationName: '<Kimihurura Supplies & organization>',
 		recipient: 'owner@example.com',
 		sender: 'onboarding@resend.dev',
 		acceptanceOrigin: 'https://owners.example.invalid',
@@ -45,7 +45,7 @@ describe('Resend owner invitation adapter (fake transport only)', () => {
 		const payload: unknown = JSON.parse(body);
 		expect(payload).toMatchObject({ from: 'onboarding@resend.dev' });
 		expect(body).toContain('#token=');
-		expect(body).toContain('&lt;Soho &amp; Gym&gt;');
+		expect(body).toContain('&lt;Kimihurura Supplies &amp; organization&gt;');
 		expect(body).not.toContain('?token=');
 		expect(body).not.toContain('password is ');
 	});
