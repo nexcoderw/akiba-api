@@ -119,7 +119,11 @@ describe('validateEnvironment', () => {
 
 	it('rejects insecure production origins before loading secrets', () => {
 		expect(() =>
-			validateEnvironment({ NODE_ENV: 'production', API_PUBLIC_ORIGIN: 'https://api.akiba.com', CORS_ORIGINS: 'http://admin.akiba.com' }),
+			validateEnvironment({
+				NODE_ENV: 'production',
+				API_PUBLIC_ORIGIN: 'https://api.akiba.com',
+				CORS_ORIGINS: 'http://admin.akiba.com',
+			}),
 		).toThrow('HTTPS');
 	});
 
@@ -134,7 +138,8 @@ describe('validateEnvironment', () => {
 
 	it('disables production Swagger by default', () => {
 		const configuration = validateEnvironment({
-			NODE_ENV: 'production', API_PUBLIC_ORIGIN: 'https://api.akiba.com',
+			NODE_ENV: 'production',
+			API_PUBLIC_ORIGIN: 'https://api.akiba.com',
 			CORS_ORIGINS: 'https://akiba.com,https://admin.akiba.com',
 			DATABASE_URL:
 				'postgresql://neondb_owner:fictional@production.example.com/neondb?sslmode=require',
@@ -190,7 +195,8 @@ describe('validateEnvironment', () => {
 	it('rejects the development key material in production', () => {
 		expect(() =>
 			validateEnvironment({
-				NODE_ENV: 'production', API_PUBLIC_ORIGIN: 'https://api.akiba.com',
+				NODE_ENV: 'production',
+				API_PUBLIC_ORIGIN: 'https://api.akiba.com',
 				CORS_ORIGINS: 'https://admin.akiba.com',
 				DATABASE_URL:
 					'postgresql://neondb_owner:fictional@production.example.com/neondb?sslmode=require',
