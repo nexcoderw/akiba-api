@@ -20,11 +20,12 @@ const fixedPortalPolicy = {
 };
 
 describe('owner invitation configuration and cryptography', () => {
-	it('validates a separately provisioned worker without HTTP session or TOTP secrets', () => {
+	it('uses the configured managed owner without HTTP session or TOTP secrets', () => {
 		const input = {
 			...invitationDeliveryInput(),
+			NODE_ENV: 'development',
 			DATABASE_URL:
-				'postgresql://akiba_invitation_worker:fictional@localhost:5432/disposable_organization',
+				'postgresql://neondb_owner:fictional@development.example.com/neondb?sslmode=require',
 		};
 		const worker = validateOwnerInvitationWorkerEnvironment(input);
 		expect(worker.DATABASE_POOL_MAX).toBeLessThanOrEqual(16);
@@ -40,9 +41,18 @@ describe('owner invitation configuration and cryptography', () => {
 		expect(() =>
 			validateOwnerInvitationWorkerEnvironment({
 				...input,
-				DATABASE_URL: 'postgresql://neondb_owner:fictional@localhost:5432/disposable_organization',
+				DATABASE_POOL_MAX: '17',
 			}),
-		).toThrow('restricted');
+		).toThrow('bounded');
+		expect(() => validateOwnerInvitationWorkerEnvironment({ ...input, NODE_ENV: 'test' })).toThrow(
+			'development or production',
+		);
+		expect(() =>
+			validateOwnerInvitationWorkerEnvironment({
+				...input,
+				DATABASE_URL: input.DATABASE_URL.replace('sslmode=require', 'sslmode=disable'),
+			}),
+		).toThrow('TLS');
 	});
 	it('is off by default and requires database and independent destination approval', () => {
 		expect(parseOwnerInvitationDeliveryEnvironment({}, false, fixedPortalPolicy)).toBeNull();
