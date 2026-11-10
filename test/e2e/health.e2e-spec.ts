@@ -1,6 +1,6 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { PrismaService } from '@nexcoderw/gym-db';
+import { PrismaService } from '@nexcoderw/akiba-db';
 import request from 'supertest';
 
 import { configureApplication } from '../../src/app-bootstrap.js';
@@ -44,7 +44,7 @@ describe('API foundation (e2e)', () => {
 			throw new Error('Expected a liveness response object.');
 		}
 		expect(body.status).toBe('ok');
-		expect(body.service).toBe('nexcode-gym-api');
+		expect(body.service).toBe('akiba-api');
 		expect(body.version).toBe('0.1.0');
 		expect(typeof body.timestamp).toBe('string');
 		expect(typeof body.uptimeSeconds).toBe('number');
@@ -58,14 +58,16 @@ describe('API foundation (e2e)', () => {
 		const body: unknown = response.body;
 
 		expect(isRecord(body)).toBe(true);
-		if (!isRecord(body) || !isRecord(body.error)) {
+		if (!isRecord(body)) {
 			throw new Error('Expected an API error response object.');
 		}
-		expect(body.error.code).toBe('NOT_FOUND');
-		expect(body.error.message).toBe('Cannot GET /api/v1/missing');
-		expect(body.error.requestId).toBe('foundation-test');
-		expect(typeof body.timestamp).toBe('string');
-		expect(body.path).toBe('/api/v1/missing');
+		expect(body.code).toBe('RESOURCE_NOT_FOUND');
+		expect(body.detail).toBe('The requested resource is unavailable.');
+		expect(body.requestId).toBe(response.get('x-request-id'));
+		expect(body.requestId).not.toBe('foundation-test');
+		expect(body.status).toBe(404);
+		expect(body.path).toBeUndefined();
+		expect(response.get('content-type')).toContain('application/problem+json');
 	});
 });
 
