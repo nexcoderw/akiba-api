@@ -101,7 +101,8 @@ async function confirmTarget(
 	writeLine('Platform owner bootstrap is a privileged, one-time operation.');
 	writeLine(`Environment: ${target.environment}`);
 	writeLine(`Database target: ${target.databaseHost}/${target.databaseName}`);
-	const phrase = `CONFIRM ${target.environment} ${target.databaseHost}/${target.databaseName}`;
+	writeLine(`Database user: ${target.databaseRole}`);
+	const phrase = `CONFIRM ${target.environment} ${target.databaseHost}/${target.databaseName} ${target.databaseRole}`;
 	const confirmation = await prompts.text(`Type "${phrase}" to continue: `);
 	if (confirmation !== phrase) {
 		throw new PlatformBootstrapError(
