@@ -11,6 +11,8 @@ import {
 } from '@nexcoderw/akiba-db';
 import request from 'supertest';
 
+import { DatabaseIntegrationModule } from '../../src/infrastructure/database/database-integration.module.js';
+import { OfflineDatabaseModule } from '../fixtures/offline-database.module.js';
 import { configureApplication } from '../../src/app-bootstrap.js';
 import { AppModule } from '../../src/app.module.js';
 import { createOpenApiDocument } from '../../src/docs/swagger.js';
@@ -46,6 +48,8 @@ describe('owner invitation delivery HTTP (real guards, DTOs, services; fake adap
 	async function initialize(input = invitationDeliveryInput()): Promise<void> {
 		const config = invitationDeliveryConfig(input);
 		const module = await Test.createTestingModule({ imports: [AppModule] })
+			.overrideModule(DatabaseIntegrationModule)
+			.useModule(OfflineDatabaseModule)
 			.overrideProvider(PrismaService)
 			.useValue(database.prisma)
 			.overrideProvider(ConfigService)
