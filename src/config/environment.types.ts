@@ -15,7 +15,7 @@ export interface EnvironmentVariables {
 	readonly SWAGGER_ENABLED: boolean;
 	readonly RATE_LIMIT_TTL_MS: number;
 	readonly RATE_LIMIT_LIMIT: number;
-	readonly DATABASE_URL: string;
+	readonly DATABASE_URL: string | null;
 	readonly DATABASE_POOL_MAX: number;
 	readonly DATABASE_CONNECTION_TIMEOUT_MS: number;
 	readonly PLATFORM_ADMIN_ORIGIN: string;
@@ -46,8 +46,4 @@ export interface EnvironmentVariables {
 	readonly PLATFORM_TOTP_KEYRING: Readonly<Record<string, string>>;
 	readonly PLATFORM_TOTP_ACTIVE_KEY_ID: string;
 	readonly PLATFORM_OWNER_BOOTSTRAP_ENABLED: boolean;
-	readonly PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_HOST: string | null;
-	readonly PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_NAME: string | null;
-	readonly PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE: string | null;
-	readonly PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_MARKER: string | null;
 }
