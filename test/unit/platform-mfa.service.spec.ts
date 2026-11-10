@@ -83,6 +83,26 @@ describe('PlatformMfaService', () => {
 		verifyTotp.mockReturnValue({ timeStep: 31_556_952n });
 	});
 
+	it('rejects an MFA proof started before a password change even if inserted later', async () => {
+		const challenge = createChallenge();
+		challenge.platformStaff.user.passwordCredential.passwordChangedAt = new Date(
+			'2030-01-01T00:00:01.000Z',
+		);
+		challengeFindUnique.mockResolvedValue(challenge);
+		await expect(
+			service.verify(
+				{
+					challengeToken: 'challenge-token-with-more-than-32-characters',
+					method: 'totp',
+					totpCode: '123456',
+				},
+				new Date('2030-01-01T00:00:02.000Z'),
+			),
+		).rejects.toMatchObject({ status: 401 });
+		expect(verifyTotp).not.toHaveBeenCalled();
+		expect(sessionCreate).not.toHaveBeenCalled();
+	});
+
 	it('atomically accepts one TOTP step, consumes the challenge, and creates a session', async () => {
 		await expect(
 			service.verify(
@@ -291,7 +311,10 @@ function createChallenge() {
 			status: PlatformStaffStatus.ACTIVE,
 			user: {
 				email: 'admin@example.com',
-				passwordCredential: { passwordChangedAt: new Date('2029-01-01T00:00:00.000Z') },
+				passwordCredential: {
+					passwordChangedAt: new Date('2029-01-01T00:00:00.000Z'),
+					disabledAt: null,
+				},
 				status: UserStatus.ACTIVE,
 				emailVerifiedAt: new Date('2029-01-01T00:00:00.000Z'),
 			},
