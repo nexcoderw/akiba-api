@@ -291,7 +291,10 @@ function createSession(
 				displayName: 'Akiba Administrator',
 				status: UserStatus.ACTIVE,
 				emailVerifiedAt: new Date('2029-01-01T00:00:00.000Z'),
-				passwordCredential: { passwordChangedAt: new Date('2029-01-01T00:00:00.000Z') },
+				passwordCredential: {
+					passwordChangedAt: new Date('2029-01-01T00:00:00.000Z'),
+					disabledAt: null,
+				},
 			},
 			roles: [
 				{
