@@ -20,9 +20,9 @@ describe('PlatformDashboardService', () => {
 			imports: [PlatformServiceAuthModule],
 			providers: [PlatformDashboardService, { provide: PrismaService, useValue: database.prisma }],
 		}).compile();
-		principal = await module.get(PlatformSessionService).authenticate(
-			'fictional-service-session-with-at-least-32-characters',
-		);
+		principal = await module
+			.get(PlatformSessionService)
+			.authenticate('fictional-service-session-with-at-least-32-characters');
 		service = module.get(PlatformDashboardService);
 	});
 
