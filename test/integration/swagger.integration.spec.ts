@@ -1,6 +1,6 @@
 import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { PrismaService } from '@nexcoderw/gym-db';
+import { PrismaService } from '@nexcoderw/akiba-db';
 
 import { AppModule } from '../../src/app.module.js';
 import { createOpenApiDocument } from '../../src/docs/swagger.js';
@@ -37,6 +37,22 @@ describe('OpenAPI integration', () => {
 		expect(document.paths['/platform/auth/mfa/verify']?.post?.responses['200']).toBeDefined();
 		expect(document.paths['/platform/auth/session']?.get?.responses['401']).toBeDefined();
 		expect(document.paths['/platform/auth/logout']?.post?.responses['204']).toBeDefined();
+	});
+
+	it('documents error media/schema/headers and excludes retired commercial routes', () => {
+		const document = createOpenApiDocument(application);
+		const response = document.paths['/platform/auth/session']?.get?.responses['401'];
+		if (response === undefined || !('content' in response)) {
+			throw new Error('Expected an authentication Problem Details response.');
+		}
+		expect(response.content).toEqual({
+			'application/problem+json': { schema: { $ref: '#/components/schemas/ApiErrorResponseDto' } },
+		});
+		expect(response.headers).toHaveProperty('X-Request-Id');
+		expect(document.components?.schemas?.ApiErrorResponseDto).toBeDefined();
+		expect(Object.keys(document.paths).join(' ')).not.toMatch(
+			/membership-plans|payments|members|reminders|reports/u,
+		);
 	});
 
 	it('documents dashboard cookie authentication, permission, errors, and safe response headers', () => {
