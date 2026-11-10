@@ -78,16 +78,37 @@ TenantAuthorizationService issues immutable, per-request contexts from live sess
 ignoring tenant headers, body fields and client role claims. TenantPortalService accepts only issued
 contexts, scopes the existing identity read by organization/membership/user, and rechecks active state,
 password/session revocation and the system owner role inside a tenant transaction. PENDING organizations
-now receive the same safe denial as other unavailable organizations. Only the explicit TenantIdentityRead capability is supported; other tenant reads default deny.
-No broad owner capability is introduced. Resource condition builders always retain the trusted organization. Permissioned writes,
-custom roles, nested/bulk mutations and branch operations fail closed until their mappings exist.
+now receive the same safe denial as other unavailable organizations. The existing owner dashboard
+continues to use its explicit TenantIdentityRead capability. Future permissioned handlers declare a
+typed RequireOrganizationPermission capability; undeclared tenant handlers still default deny.
+Resource condition builders always retain the trusted organization.
 
 Persistence ownership remains distinct: User/PasswordCredential/OwnerSession are user-global security
 records; PlatformStaff, platform roles/permissions, MFA/sessions and authorization audits are platform
 security records; Organization is the platform-managed tenant root; memberships, organization roles,
 invitations, deliveries, enrollment and organization/ownership/acceptance audits are scoped associations.
-Composite keys protect cross-organization assignments. Branch and organization permission mappings are
-still absent. Transaction-local settings are not row filtering or authorization.
+Composite keys protect cross-organization assignments and role-permission mappings. The organization
+permission catalog is version controlled in `akiba-db`; no tenant-defined capability strings are
+accepted. Multiple active custom roles contribute a positive union of declared grants for the selected
+organization only. Inactive roles, unknown permissions, and system-role lookalikes grant nothing.
+The trusted system owner role receives the organization catalog, while owner-only capabilities cannot
+be delegated through custom-role mappings. The owner-only capability is withheld unless the live
+session has AAL2 with an MFA verification timestamp; no current management workflow invokes it.
+Platform grants never enter this union.
+
+OrganizationAuthorizationService rechecks live session, global account, credential, organization and
+membership state and loads current role mappings. There is no permission cache, so committed role or
+membership changes take effect on the next check. Resource scopes are explicit: organization-wide
+checks use the issued organization; branch checks deny until verified branch membership exists.
+OrganizationAccessManagementService exposes internal-only custom-role creation, detail and permission changes,
+role disablement, assignment and ordinary membership state changes. Each operation locks the tenant
+root, checks current actor grants in the same transaction, constrains delegation to the actor's
+effective permissions, uses authorization versions, and writes an append-only actor audit. Owner-role
+assignment/removal and owner membership suspension/revocation are denied in this service. Owner
+enrollment remains the only existing path for protected owner assignment. No member invitation,
+owner transfer, owner MFA step-up, public role editor or branch policy is exposed yet. Error responses
+use the existing safe problem catalog; internal database exceptions are not reflected in public text.
+Transaction-local settings are not row filtering or authorization.
 
 The DB transaction helper snapshots scope and rejects nested tenant transactions; reuse the callback
 client within one operation. Existing guarded DB suites cover physical pool cleanup/rollback/concurrency
