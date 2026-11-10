@@ -8,6 +8,8 @@ import request from 'supertest';
 import { DatabaseIntegrationModule } from '../../src/infrastructure/database/database-integration.module.js';
 import { OfflineDatabaseModule } from '../fixtures/offline-database.module.js';
 import { configureApplication } from '../../src/app-bootstrap.js';
+import { AccessBoundary } from '../../src/common/security/route-access.decorator.js';
+import { PlatformOriginCsrfGuard } from '../../src/modules/platform/auth/platform-origin-csrf.guard.js';
 import { AppModule } from '../../src/app.module.js';
 import { validateEnvironment } from '../../src/config/environment.validation.js';
 import { PlatformCookieService } from '../../src/modules/platform/auth/platform-cookie.service.js';
@@ -23,10 +25,11 @@ const ADMIN_ORIGIN = 'http://localhost:4000';
 const CSRF_TOKEN = 'fictional-csrf-token-with-more-than-32-characters';
 const SESSION_TOKEN = 'fictional-session-token-with-more-than-32-characters';
 
+@AccessBoundary('platform')
 @Controller('platform/permission-probe')
 class PlatformPermissionProbeController {
 	@Get()
-	@UseGuards(PlatformSessionGuard, PlatformPermissionGuard)
+	@UseGuards(PlatformOriginCsrfGuard, PlatformSessionGuard, PlatformPermissionGuard)
 	@RequirePlatformPermissions('platform.dashboard.read')
 	read(): { readonly status: 'permitted' } {
 		return { status: 'permitted' };
@@ -76,6 +79,7 @@ describe('platform authentication HTTP API (e2e)', () => {
 			controllers: [PlatformPermissionProbeController],
 			providers: [
 				PlatformCookieService,
+				PlatformOriginCsrfGuard,
 				PlatformPermissionGuard,
 				PlatformSessionGuard,
 				PlatformSessionService,
