@@ -9,7 +9,7 @@ import {
 	OwnerSessionAssurance,
 	PrismaService,
 	UserStatus,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 
 import type { OwnerAuthenticatedResponseDto } from './dto/owner-auth-response.dto.js';
 import type { OwnerLoginDto } from './dto/owner-login.dto.js';
@@ -61,14 +61,14 @@ export class OwnerLoginService {
 			!hasOwnerMembership
 		) {
 			this.attempts.recordFailure(ipAddress, input.email, now.getTime());
-			this.logger.warn('owner_login_rejected');
+			this.logger.warn(JSON.stringify({ event: 'owner_login_rejected' }));
 			throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidCredentials);
 		}
 
 		try {
 			const session = await this.sessions.create(identity.id, OwnerSessionAssurance.AAL1, now);
 			this.attempts.clearAccount(input.email);
-			this.logger.log(`owner_session_created userId=${identity.id}`);
+			this.logger.log(JSON.stringify({ event: 'owner_session_created', userId: identity.id }));
 			return {
 				status: 'authenticated',
 				expiresAt: session.expiresAt.toISOString(),
