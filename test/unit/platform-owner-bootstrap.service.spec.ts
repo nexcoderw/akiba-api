@@ -30,7 +30,11 @@ describe('PlatformOwnerBootstrapService', () => {
 	const totpCreate = jest.fn<() => Promise<unknown>>();
 	const totpUpdateMany = jest.fn<() => Promise<{ count: number }>>();
 	const recoveryCreateMany = jest.fn<() => Promise<{ count: number }>>();
+	const identityAuditCreate = jest
+		.fn<() => Promise<unknown>>()
+		.mockResolvedValue({ id: 'audit-id' });
 	const transaction = {
+		identitySecurityAuditEvent: { create: identityAuditCreate },
 		$queryRaw: queryRaw,
 		platformStaff: { count: staffCount, updateMany: staffUpdateMany },
 		user: { findUnique: userFindUnique, create: userCreate, updateMany: userUpdateMany },
@@ -100,7 +104,11 @@ describe('PlatformOwnerBootstrapService', () => {
 		permissionFindUnique.mockResolvedValue(null);
 		permissionCreate.mockResolvedValue({ id: 'dashboard-permission-id' });
 		rolePermissionUpsert.mockResolvedValue({});
-		userCreate.mockResolvedValue({ platformStaff: { id: 'staff-id' } });
+		userCreate.mockResolvedValue({
+			id: 'user-id',
+			identityVersion: 1,
+			platformStaff: { id: 'staff-id' },
+		});
 		staffRoleCreate.mockResolvedValue({});
 		totpCreate.mockResolvedValue({ id: 'totp-id' });
 		hashPassword.mockResolvedValue('approved-password-hash');
@@ -122,8 +130,8 @@ describe('PlatformOwnerBootstrapService', () => {
 		digest.mockImplementation((value) => `${value}-digest`);
 	});
 
-	it('accepts a twelve-character password and creates one pending owner', async () => {
-		const password = Buffer.from('A7!b2@Qx9#Za', 'utf8');
+	it('accepts a fifteen-character password and creates one pending owner', async () => {
+		const password = Buffer.from('A7!b2@Qx9#Za123', 'utf8');
 
 		await expect(
 			service.initialize({
@@ -137,10 +145,12 @@ describe('PlatformOwnerBootstrapService', () => {
 				email: 'owner@example.com',
 				displayName: 'Fictional Owner',
 				status: UserStatus.PENDING,
-				passwordCredential: { create: { passwordHash: 'approved-password-hash' } },
+				passwordCredential: {
+					create: { passwordHash: 'approved-password-hash', normalization: 'nfc' },
+				},
 				platformStaff: { create: { status: PlatformStaffStatus.PENDING } },
 			},
-			select: { platformStaff: { select: { id: true } } },
+			select: { id: true, identityVersion: true, platformStaff: { select: { id: true } } },
 		});
 		expect(permissionCreate).toHaveBeenCalledWith({
 			data: {
@@ -157,8 +167,8 @@ describe('PlatformOwnerBootstrapService', () => {
 		Buffer.from('A7!b2@Qx9#Z'),
 		Buffer.from('😀'.repeat(6)),
 		Buffer.from('x'.repeat(1025)),
-		Buffer.from('é'.repeat(513)),
-		Buffer.from('Owner@Example.com!'),
+		Buffer.from('é'.repeat(1025)),
+		Buffer.from('Owner@Example.com'),
 		Buffer.from('valid password\u0000'),
 		Buffer.from('valid password\n'),
 		Buffer.from('valid password\u007f'),
@@ -355,6 +365,7 @@ interface PendingOwnerFixture {
 	readonly id: string;
 	readonly status: UserStatus;
 	readonly emailVerifiedAt: Date | null;
+	readonly identityVersion: number;
 	readonly platformStaff: {
 		readonly id: string;
 		readonly status: PlatformStaffStatus;
@@ -385,6 +396,7 @@ interface PendingOwnerFixture {
 function createPendingOwner(): PendingOwnerFixture {
 	return {
 		id: 'user-id',
+		identityVersion: 1,
 		status: UserStatus.PENDING,
 		emailVerifiedAt: null,
 		platformStaff: {
