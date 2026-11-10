@@ -1,3 +1,7 @@
+import { randomUUID } from 'node:crypto';
+import { normalizeEmailIdentity } from '../../../common/identity/email-identity.js';
+import { recordIdentityEvent } from '../../identity/identity-security.js';
+import { accountCanAuthenticate } from '../../../common/identity/account-state.policy.js';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -163,11 +167,15 @@ export class OwnerEnrollmentService {
 		}
 		const passwordHash =
 			challenge.user.passwordCredential?.passwordHash ?? this.passwords.dummyHash;
-		const valid = await this.passwords.verify(passwordHash, input.password);
+		const valid = await this.passwords.verify(
+			passwordHash,
+			input.password,
+			challenge.user.passwordCredential?.normalization ?? 'raw',
+		);
 		if (
 			!valid ||
-			challenge.user.status !== UserStatus.ACTIVE ||
-			challenge.user.emailVerifiedAt === null ||
+			!accountCanAuthenticate(challenge.user.status, challenge.user.emailVerifiedAt) ||
+			challenge.user.passwordCredential?.disabledAt !== null ||
 			challenge.user.platformStaff !== null
 		) {
 			await this.recordFailure(challenge.id, now);
@@ -202,6 +210,7 @@ export class OwnerEnrollmentService {
 		input: RegisterInvitedOwnerDto,
 		now = new Date(),
 		organizationSlug?: string,
+		auditRequestId?: string,
 	): Promise<VerifiedOwnerEnrollment> {
 		const challenge = await this.readChallenge(input.challengeToken, now);
 		if (
@@ -213,28 +222,30 @@ export class OwnerEnrollmentService {
 		) {
 			throw invalidOwnerEnrollment();
 		}
+		const requestId = auditRequestId ?? `req_${randomUUID()}`;
+		const invitedEmail = normalizeEmailIdentity(challenge.ownerInvitation.invitedEmail);
+		if (invitedEmail === null || !/^req_[0-9a-f-]{36}$/u.test(requestId))
+			throw invalidOwnerEnrollment();
 		const password = Buffer.from(input.password, 'utf8');
 		let phase: 'password_hash' | 'identity_transaction' | 'session_creation' = 'password_hash';
 		try {
 			if (!acceptsBootstrapPassword(password, challenge.ownerInvitation.invitedEmail)) {
-				throw ownerEnrollmentConflict(
-					'Choose a stronger password that does not contain the email.',
-				);
+				throw ownerEnrollmentConflict('Choose a stronger password of at least 15 characters.');
 			}
 			const passwordHash = await this.passwords.hash(password);
 			phase = 'identity_transaction';
 			const userId = await this.prisma.$transaction(async (transaction) => {
 				const user = await transaction.user.create({
 					data: {
-						email: challenge.ownerInvitation.invitedEmail,
+						email: invitedEmail,
 						displayName: input.displayName,
 						status: UserStatus.ACTIVE,
 						emailVerifiedAt: now,
 						passwordCredential: {
-							create: { passwordHash, passwordChangedAt: now },
+							create: { passwordHash, normalization: 'nfc', passwordChangedAt: now },
 						},
 					},
-					select: { id: true },
+					select: { id: true, identityVersion: true },
 				});
 				const verified = await transaction.organizationOwnerEnrollmentChallenge.updateMany({
 					where: {
@@ -253,6 +264,15 @@ export class OwnerEnrollmentService {
 					},
 				});
 				if (verified.count !== 1) throw invalidOwnerEnrollment();
+				const actor = { actorKind: 'enrollment' as const, actorUserId: user.id, requestId };
+				for (const action of ['identity_created', 'email_verified', 'password_created'] as const) {
+					await recordIdentityEvent(transaction, actor, {
+						userId: user.id,
+						action,
+						identityVersion: user.identityVersion,
+						...(action === 'password_created' ? { credentialVersion: 1 } : {}),
+					});
+				}
 				return user.id;
 			}, TRANSACTION_OPTIONS);
 			phase = 'session_creation';
@@ -293,7 +313,9 @@ export class OwnerEnrollmentService {
 							status: true,
 							emailVerifiedAt: true,
 							platformStaff: { select: { id: true } },
-							passwordCredential: { select: { passwordHash: true } },
+							passwordCredential: {
+								select: { passwordHash: true, normalization: true, disabledAt: true },
+							},
 						},
 					},
 				},
