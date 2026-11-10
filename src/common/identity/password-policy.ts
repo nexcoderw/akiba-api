@@ -10,7 +10,7 @@ export const MAXIMUM_PASSWORD_BYTES = 4096;
 export function normalizeNewPassword(value: string): string | null {
 	if (value.length > MAXIMUM_PASSWORD_BYTES || /[\p{Cc}\p{Cs}]/u.test(value)) return null;
 	const normalized = value.normalize('NFC');
-	const length = [...normalized].length;
+	const length = Array.from(normalized).length;
 	return length >= MINIMUM_PASSWORD_CHARACTERS &&
 		length <= MAXIMUM_PASSWORD_CHARACTERS &&
 		Buffer.byteLength(normalized, 'utf8') <= MAXIMUM_PASSWORD_BYTES
