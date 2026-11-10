@@ -6,7 +6,7 @@ import {
 export const PLATFORM_OWNER_ROLE = Object.freeze({
 	key: PLATFORM_SUPERADMIN_ROLE_KEY,
 	name: 'Platform owner',
-	description: 'Initial NEXCODE platform owner with explicitly reviewed permissions.',
+	description: 'Initial Akiba platform owner with explicitly reviewed permissions.',
 });
 
 // Preserve the bootstrap's persisted enrollment allowlist for existing pending owners.
@@ -14,7 +14,7 @@ export const PLATFORM_OWNER_ROLE = Object.freeze({
 export const PLATFORM_OWNER_PERMISSIONS = Object.freeze([
 	Object.freeze({
 		key: PLATFORM_PERMISSION.dashboardRead,
-		description: 'View the NEXCODE platform administration dashboard.',
+		description: 'View the Akiba platform administration dashboard.',
 	}),
 ]);
 
