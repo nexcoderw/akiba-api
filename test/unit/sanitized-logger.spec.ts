@@ -7,10 +7,10 @@ describe('production log projection', () => {
 			'postgresql://user:private-password@internal-host/database',
 			{ event: 'provider.error', route: 'private-password', cookie: 'private-cookie' },
 		]) {
-			expect(sanitizedLog(input, 'error')).toEqual({
-				timestamp: expect.any(String),
-				event: 'application.error',
-			});
+			const result = sanitizedLog(input, 'error');
+			expect(Object.keys(result).sort()).toEqual(['event', 'timestamp']);
+			expect(result.event).toBe('application.error');
+			expect(typeof result.timestamp).toBe('string');
 		}
 	});
 
