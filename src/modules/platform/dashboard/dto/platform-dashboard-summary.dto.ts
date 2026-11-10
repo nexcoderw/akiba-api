@@ -30,7 +30,8 @@ export class PlatformDashboardSummaryDto {
 
 	@ApiProperty({
 		type: PlatformDashboardCountDto,
-		description: 'All global identity accounts, regardless of status; these are not gym members.',
+		description:
+			'All global identity accounts, regardless of status; these are not organization members.',
 	})
 	globalUsers!: PlatformDashboardCountDto;
 
