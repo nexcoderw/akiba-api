@@ -1,19 +1,22 @@
 import { Global, Module } from '@nestjs/common';
-import { DatabaseModule } from '@nexcoderw/gym-db';
+import { ConfigService } from '@nestjs/config';
+import { DatabaseModule } from '@nexcoderw/akiba-db';
 
-import { validateEnvironment } from '../../config/environment.validation.js';
+import type { EnvironmentVariables } from '../../config/environment.types.js';
 
 /** Registers the published database package once and exposes its public services application-wide. */
 @Global()
 @Module({
 	imports: [
 		DatabaseModule.forRootAsync({
-			useFactory: () => {
-				const environment = validateEnvironment(process.env);
+			inject: [ConfigService],
+			useFactory: (config: ConfigService<EnvironmentVariables, true>) => {
 				return {
-					databaseUrl: environment.DATABASE_URL,
-					poolMax: environment.DATABASE_POOL_MAX,
-					connectionTimeoutMilliseconds: environment.DATABASE_CONNECTION_TIMEOUT_MS,
+					databaseUrl: config.get('DATABASE_URL', { infer: true }),
+					poolMax: config.get('DATABASE_POOL_MAX', { infer: true }),
+					connectionTimeoutMilliseconds: config.get('DATABASE_CONNECTION_TIMEOUT_MS', {
+						infer: true,
+					}),
 				};
 			},
 		}),
