@@ -8,13 +8,18 @@ import { TenantAuthorizationService } from './tenant-authorization.service.js';
 
 @Injectable()
 export class OrganizationTenantGuard implements CanActivate {
-	constructor(private readonly tenants: TenantAuthorizationService, private readonly reflector: Reflector) {}
+	constructor(
+		private readonly tenants: TenantAuthorizationService,
+		private readonly reflector: Reflector,
+	) {}
 	async canActivate(context: ExecutionContext): Promise<boolean> {
 		const request = context.switchToHttp().getRequest<OwnerRequest>();
 		const tenant = await this.tenants.establish(request);
-		if (!['GET', 'HEAD'].includes(request.method) ||
-			this.reflector.get<boolean>(TENANT_IDENTITY_READ, context.getHandler()) !== true) {
-			this.tenants.requirePermissions(tenant, ['organization.mutate']);
+		if (
+			!['GET', 'HEAD'].includes(request.method) ||
+			this.reflector.get<boolean | undefined>(TENANT_IDENTITY_READ, context.getHandler()) !== true
+		) {
+			this.tenants.requirePermissions(tenant);
 		}
 		return true;
 	}
