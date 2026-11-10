@@ -1,7 +1,7 @@
-export const PLATFORM_SESSION_COOKIE = '__Host-nexcode-platform-session';
-export const LOCAL_PLATFORM_SESSION_COOKIE = 'nexcode-platform-session';
-export const PLATFORM_CSRF_COOKIE = '__Host-nexcode-platform-csrf';
-export const LOCAL_PLATFORM_CSRF_COOKIE = 'nexcode-platform-csrf';
+export const PLATFORM_SESSION_COOKIE = '__Host-akiba-platform-session';
+export const LOCAL_PLATFORM_SESSION_COOKIE = 'akiba-platform-session';
+export const PLATFORM_CSRF_COOKIE = '__Host-akiba-platform-csrf';
+export const LOCAL_PLATFORM_CSRF_COOKIE = 'akiba-platform-csrf';
 export const PLATFORM_CSRF_HEADER = 'x-platform-csrf-token';
 export const PLATFORM_PERMISSIONS_METADATA = 'platform-auth:permissions';
 
