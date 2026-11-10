@@ -44,7 +44,7 @@ export class ResendOwnerInvitationEmailService {
 		}
 		const link = new URL(snapshot.acceptancePath, snapshot.acceptanceOrigin);
 		link.hash = `token=${snapshot.token}`;
-		const text = `You are invited to manage ${snapshot.organizationName} on NEXCODE Gym.\n\nReview your invitation: ${link.toString()}\n\nThis invitation expires at ${expiresAt.toISOString()} (UTC). It does not create or activate an account. No account credentials are included. If you did not expect this invitation, ignore it.`;
+		const text = `You are invited to manage ${snapshot.organizationName} on Akiba.\n\nReview your invitation: ${link.toString()}\n\nThis invitation expires at ${expiresAt.toISOString()} (UTC). It does not create or activate an account. No account credentials are included. If you did not expect this invitation, ignore it.`;
 		try {
 			const response = await fetch('https://api.resend.com/emails', {
 				method: 'POST',
@@ -58,7 +58,7 @@ export class ResendOwnerInvitationEmailService {
 				body: JSON.stringify({
 					from: sender,
 					to: [snapshot.recipient],
-					subject: "You're invited to manage a gym on NEXCODE Gym",
+					subject: "You're invited to manage a organization on Akiba",
 					text,
 					html: `<p>${escapeHtml(text).replaceAll('\n', '<br>')}</p>`,
 				}),
