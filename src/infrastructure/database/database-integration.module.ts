@@ -11,8 +11,12 @@ import type { EnvironmentVariables } from '../../config/environment.types.js';
 		DatabaseModule.forRootAsync({
 			inject: [ConfigService],
 			useFactory: (config: ConfigService<EnvironmentVariables, true>) => {
+				const databaseUrl = config.get('DATABASE_URL', { infer: true });
+				if (config.get('NODE_ENV', { infer: true }) === 'test' || databaseUrl === null) {
+					throw new Error('Offline tests must replace DatabaseIntegrationModule with a fake.');
+				}
 				return {
-					databaseUrl: config.get('DATABASE_URL', { infer: true }),
+					databaseUrl,
 					poolMax: config.get('DATABASE_POOL_MAX', { infer: true }),
 					connectionTimeoutMilliseconds: config.get('DATABASE_CONNECTION_TIMEOUT_MS', {
 						infer: true,
