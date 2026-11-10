@@ -7,7 +7,7 @@ import {
 	OrganizationStatus,
 	PrismaService,
 	UserStatus,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 
 import type { OwnerPrincipal } from '../../src/modules/owner/auth/owner-auth.types.js';
 import { OwnerTokenService } from '../../src/modules/owner/auth/owner-token.service.js';
@@ -86,7 +86,7 @@ describe('OwnerAcceptanceService', () => {
 		const harness = await createHarness();
 		try {
 			await expect(
-				harness.service.accept(PRINCIPAL, 'token', 'request', NOW, 'another-gym'),
+				harness.service.accept(PRINCIPAL, 'token', 'request', NOW, 'another-organization'),
 			).rejects.toMatchObject({ status: 409 });
 			expect(harness.transaction.organizationRole.upsert).not.toHaveBeenCalled();
 			expect(harness.transaction.organizationMembership.create).not.toHaveBeenCalled();
@@ -102,7 +102,7 @@ describe('OwnerAcceptanceService', () => {
 		const harness = await createHarness();
 		try {
 			await expect(
-				harness.service.accept(principal, 'token', 'request', NOW, 'example-gym'),
+				harness.service.accept(principal, 'token', 'request', NOW, 'example-organization'),
 			).rejects.toMatchObject({ status: 401 });
 			expect(harness.transaction.organizationRole.upsert).not.toHaveBeenCalled();
 			expect(harness.transaction.organizationMembership.create).not.toHaveBeenCalled();
@@ -117,7 +117,7 @@ describe('OwnerAcceptanceService', () => {
 			const harness = await createHarness({ membershipStatus });
 			try {
 				await expect(
-					harness.service.accept(PRINCIPAL, 'token', 'request', NOW, 'example-gym'),
+					harness.service.accept(PRINCIPAL, 'token', 'request', NOW, 'example-organization'),
 				).rejects.toMatchObject({ status: 409 });
 				expect(harness.transaction.organizationMembership.create).not.toHaveBeenCalled();
 				expect(harness.transaction.organizationMembership.update).not.toHaveBeenCalled();
@@ -138,10 +138,10 @@ describe('OwnerAcceptanceService', () => {
 		});
 		try {
 			await expect(
-				harness.service.accept(PRINCIPAL, 'token', 'first-request', NOW, 'example-gym'),
+				harness.service.accept(PRINCIPAL, 'token', 'first-request', NOW, 'example-organization'),
 			).resolves.toMatchObject({ status: 'accepted' });
 			await expect(
-				harness.service.accept(PRINCIPAL, 'token', 'second-request', NOW, 'example-gym'),
+				harness.service.accept(PRINCIPAL, 'token', 'second-request', NOW, 'example-organization'),
 			).rejects.toMatchObject({ status: 401 });
 			expect(harness.transaction.organizationMembership.create).toHaveBeenCalledTimes(1);
 			expect(harness.transaction.organizationMembershipRole.upsert).toHaveBeenCalledTimes(1);
@@ -204,8 +204,8 @@ function challengeFixture(): ChallengeFixture {
 			tokenDigest: 'digest',
 			organization: {
 				id: 'organization',
-				name: 'Example Gym',
-				slug: 'example-gym',
+				name: 'Example organization',
+				slug: 'example-organization',
 				status: OrganizationStatus.ACTIVE,
 			},
 		},
