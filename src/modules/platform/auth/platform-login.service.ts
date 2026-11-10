@@ -6,7 +6,7 @@ import {
 	UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PlatformStaffStatus, Prisma, PrismaService, UserStatus } from '@nexcoderw/gym-db';
+import { PlatformStaffStatus, Prisma, PrismaService, UserStatus } from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
 import type { PlatformMfaChallengeResponseDto } from './dto/platform-auth-response.dto.js';
@@ -58,7 +58,7 @@ export class PlatformLoginService {
 			identity.platformStaff?.status !== PlatformStaffStatus.ACTIVE
 		) {
 			this.attempts.recordFailure(ipAddress, input.email, now.getTime());
-			this.logger.warn('platform_login_rejected');
+			this.logger.warn(JSON.stringify({ event: 'platform_login_rejected' }));
 			throw new UnauthorizedException(PLATFORM_AUTH_ERROR.invalidCredentials);
 		}
 		const platformStaff = identity.platformStaff;
@@ -104,7 +104,9 @@ export class PlatformLoginService {
 			throw this.persistenceFailure(error);
 		}
 		this.attempts.clearAccount(input.email);
-		this.logger.log(`platform_mfa_challenge_created staffId=${platformStaff.id}`);
+		this.logger.log(
+			JSON.stringify({ event: 'platform_mfa_challenge_created', staffId: platformStaff.id }),
+		);
 
 		return {
 			challengeToken,
