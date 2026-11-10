@@ -19,12 +19,22 @@ jobs:
     name: Verify API
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    env:
+      DB_SOURCE_REVISION: ${{ vars.AKIBA_DB_SOURCE_REVISION }}
     steps:
+      - name: Require a reviewed immutable database revision
+        shell: bash
+        run: |
+          if [[ ! "$DB_SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Set AKIBA_DB_SOURCE_REVISION to the reviewed database commit containing the identity foundation."
+            exit 1
+          fi
+
       - name: Check out database package
         uses: actions/checkout@v4
         with:
           repository: nexcoderw/akiba-db
-          ref: 71096ae94640e8227623d700e5c2fcb9a12007fb
+          ref: ${{ env.DB_SOURCE_REVISION }}
           token: ${{ secrets.DB_REPOSITORY_READ_TOKEN }}
           path: db
 
