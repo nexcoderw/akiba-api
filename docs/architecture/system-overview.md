@@ -1,31 +1,18 @@
-# System Overview
+# System overview
 
-## Deployment model
-
-`api.gym.rw` is one shared NestJS modular monolith serving many organizations. Public web, platform
-admin, and tenant portals are separate clients, not separate backend deployments. The hierarchy is
-Platform → Organization → Branch → authorized staff/member.
-
-## Request flow
+Akiba is a shared NestJS 11 modular monolith using TypeScript ESM, Express 5 and the canonical
+PostgreSQL/Prisma package. Public, platform and organization clients have separate trust boundaries.
+Domain names such as `api.akiba.com`, `admin.akiba.com` and `musomesa.akiba.com` are design examples,
+not deployment or DNS verification.
 
 ```text
-client/BFF
-  -> edge TLS and abuse controls
-  -> request ID, security headers, CORS, rate limit
-  -> authentication
-  -> active organization resolution and membership verification
-  -> permission + branch/resource + entitlement checks
-  -> feature application service
-  -> @nexcoderw/gym-db tenant transaction
-  -> PostgreSQL
+TLS ingress -> server request ID/log observer -> Helmet -> bounded parsers -> exact CORS
+ -> throttler -> origin/CSRF + live session + permission/membership guards
+ -> validated controller -> scoped application service -> canonical database package
+ -> safe DTO or catalog Problem Details
 ```
 
-Only the transport foundation and liveness path are currently implemented. Authentication onward is a
-required future slice. Cross-cutting guards must default deny; modules remain deployable together until
-measured operational needs justify extraction.
-
-## Operational boundaries
-
-Use UTC internally and Africa/Kigali for explicit business schedules. Queue expensive reports and
-notifications. Cache only with organization/authorization-aware keys. Emit request IDs, safe logs,
-metrics, and traces; do not log bodies, credentials, or personal data by default.
+Existing authentication, MFA, session, organization and onboarding infrastructure is retained.
+Inventory and full custom-role/recovery workflows are future work. See
+[authentication foundation](authentication-foundation.md) and the
+[security checklist](../security/security-checklist.md). Live tenant isolation is not production-ready.
