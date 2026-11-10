@@ -3,7 +3,7 @@ import { ConflictException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { OrganizationStatus } from '@nexcoderw/gym-db';
+import { OrganizationStatus } from '@nexcoderw/akiba-db';
 import request from 'supertest';
 
 import { configureApplication } from '../../src/app-bootstrap.js';
@@ -27,7 +27,7 @@ const CSRF_TOKEN = 'b'.repeat(43);
 const CHALLENGE_TOKEN = 'c'.repeat(43);
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 const MEMBERSHIP_ID = '22222222-2222-4222-8222-222222222222';
-const SOHO_ORIGIN = 'https://soho.mucyora.rw';
+const SOHO_ORIGIN = 'https://kimihurura.akiba.com';
 
 describe('owner invitation acceptance authorization (e2e)', () => {
 	let application: NestExpressApplication | undefined;
@@ -37,7 +37,7 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 	beforeAll(async () => {
 		const configValues = new Map<string, unknown>([
 			['ORGANIZATION_PORTAL_ORIGIN', null],
-			['ORGANIZATION_PORTAL_BASE_DOMAIN', 'mucyora.rw'],
+			['ORGANIZATION_PORTAL_BASE_DOMAIN', 'akiba.com'],
 			['OWNER_AUTH_COOKIE_SECURE', true],
 		]);
 		const module = await Test.createTestingModule({
@@ -70,7 +70,7 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 		application = module.createNestApplication<NestExpressApplication>();
 		configureApplication(application, {
 			CORS_ORIGINS: [],
-			ORGANIZATION_PORTAL_BASE_DOMAIN: 'mucyora.rw',
+			ORGANIZATION_PORTAL_BASE_DOMAIN: 'akiba.com',
 			SWAGGER_ENABLED: false,
 		});
 		await application.init();
@@ -88,7 +88,7 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 			organizations: [],
 		});
 		accept.mockImplementation((_principal, _token, _requestId, _now, organizationSlug) => {
-			if (organizationSlug !== 'soho') {
+			if (organizationSlug !== 'kimihurura') {
 				throw new ConflictException({
 					code: 'OWNER_ENROLLMENT_CONFLICT',
 					message: 'This organization is not eligible for owner enrollment.',
@@ -97,8 +97,8 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 			return Promise.resolve({
 				status: 'accepted',
 				organizationId: ORGANIZATION_ID,
-				organizationName: 'Soho Gym',
-				organizationSlug: 'soho',
+				organizationName: 'Kimihurura Supplies',
+				organizationSlug: 'kimihurura',
 				organizationStatus: OrganizationStatus.ACTIVE,
 				membershipId: MEMBERSHIP_ID,
 			});
@@ -111,8 +111,8 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 		await acceptanceRequest().expect(200).expect({
 			status: 'accepted',
 			organizationId: ORGANIZATION_ID,
-			organizationName: 'Soho Gym',
-			organizationSlug: 'soho',
+			organizationName: 'Kimihurura Supplies',
+			organizationSlug: 'kimihurura',
 			organizationStatus: OrganizationStatus.ACTIVE,
 			membershipId: MEMBERSHIP_ID,
 		});
@@ -125,7 +125,7 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 			CHALLENGE_TOKEN,
 			undefined,
 			undefined,
-			'soho',
+			'kimihurura',
 		);
 	});
 
@@ -141,14 +141,14 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 		expect(accept).not.toHaveBeenCalled();
 	});
 
-	it("cannot accept Soho Gym's invitation from another gym subdomain", async () => {
-		await acceptanceRequest('https://diamondgym.mucyora.rw').expect(409);
+	it("cannot accept Kimihurura Supplies's invitation from another organization subdomain", async () => {
+		await acceptanceRequest('https://diamond-supplies.akiba.com').expect(409);
 		expect(accept).toHaveBeenCalledWith(
 			expect.any(Object),
 			CHALLENGE_TOKEN,
 			undefined,
 			undefined,
-			'diamondgym',
+			'diamond-supplies',
 		);
 	});
 
