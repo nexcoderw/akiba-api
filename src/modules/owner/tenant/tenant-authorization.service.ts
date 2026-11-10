@@ -27,14 +27,24 @@ export class TenantAuthorizationService {
 		const token = this.cookies.readSession(request);
 		if (token === undefined) throw new ApiProblemException('UNAUTHENTICATED');
 		const principal = await this.sessions.authenticate(token);
-		const access = principal.organizations.find((item) => item.slug === route.slug &&
-			item.status === OrganizationStatus.ACTIVE);
+		const access = principal.organizations.find(
+			(item) => item.slug === route.slug && item.status === OrganizationStatus.ACTIVE,
+		);
 		if (access === undefined) throw new ApiProblemException('ORGANIZATION_UNAVAILABLE');
 		const context: TenantSecurityContext = Object.freeze({
-			principal: 'organization', userId: principal.userId, organizationId: access.organizationId,
-			organizationSlug: access.slug, membershipId: access.membershipId, sessionId: principal.sessionId,
-			assurance: principal.assurance, expiresAt: principal.expiresAt.getTime(), requestId: ensureRequestId(request),
-			resourceScope: Object.freeze({ organizationId: access.organizationId, branchIds: Object.freeze([]) }),
+			principal: 'organization',
+			userId: principal.userId,
+			organizationId: access.organizationId,
+			organizationSlug: access.slug,
+			membershipId: access.membershipId,
+			sessionId: principal.sessionId,
+			assurance: principal.assurance,
+			expiresAt: principal.expiresAt.getTime(),
+			requestId: ensureRequestId(request),
+			resourceScope: Object.freeze({
+				organizationId: access.organizationId,
+				branchIds: Object.freeze([]),
+			}),
 		});
 		this.issued.add(context);
 		this.requests.set(request, context);
@@ -49,32 +59,44 @@ export class TenantAuthorizationService {
 	}
 
 	assert(context: TenantSecurityContext): void {
-		if (!this.issued.has(context) || context.principal !== 'organization' ||
-			context.expiresAt <= Date.now()) throw new ApiProblemException('ORGANIZATION_UNAVAILABLE');
+		if (!this.issued.has(context) || context.expiresAt <= Date.now())
+			throw new ApiProblemException('ORGANIZATION_UNAVAILABLE');
 	}
 
 	/** Scope always comes from the issued context, never a caller's organization filter. */
-	resourceWhere(context: TenantSecurityContext, resourceId: string): Readonly<{ organizationId: string; id: string }> {
+	resourceWhere(
+		context: TenantSecurityContext,
+		resourceId: string,
+	): Readonly<{ organizationId: string; id: string }> {
 		this.assert(context);
 		if (!UUID.test(resourceId)) throw new ApiProblemException('RESOURCE_NOT_FOUND');
 		return Object.freeze({ organizationId: context.organizationId, id: resourceId });
 	}
 
-	resourceWhereMany(context: TenantSecurityContext, resourceIds: readonly string[]): Readonly<{
-		organizationId: string; id: Readonly<{ in: readonly string[] }>;
+	resourceWhereMany(
+		context: TenantSecurityContext,
+		resourceIds: readonly string[],
+	): Readonly<{
+		organizationId: string;
+		id: Readonly<{ in: readonly string[] }>;
 	}> {
 		this.assert(context);
-		if (resourceIds.length === 0 || resourceIds.length > 100 || resourceIds.some((id) => !UUID.test(id))) {
+		if (
+			resourceIds.length === 0 ||
+			resourceIds.length > 100 ||
+			resourceIds.some((id) => !UUID.test(id))
+		) {
 			throw new ApiProblemException('BAD_REQUEST');
 		}
-		return Object.freeze({ organizationId: context.organizationId,
-			id: Object.freeze({ in: Object.freeze([...new Set(resourceIds)]) }) });
+		return Object.freeze({
+			organizationId: context.organizationId,
+			id: Object.freeze({ in: Object.freeze([...new Set(resourceIds)]) }),
+		});
 	}
 
 	/** No organization permission/branch catalog exists yet. Owner status grants no blanket access. */
-	requirePermissions(context: TenantSecurityContext, permissions: readonly string[]): never {
+	requirePermissions(context: TenantSecurityContext): never {
 		this.assert(context);
-		void permissions;
 		throw new ApiProblemException('ORGANIZATION_ACCESS_DENIED');
 	}
 }
