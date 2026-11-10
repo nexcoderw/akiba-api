@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals';
-import type { PlatformStaffStatus } from '@nexcoderw/gym-db';
+import type { PlatformStaffStatus } from '@nexcoderw/akiba-db';
 
 export interface StaffStatusAggregate {
 	readonly status: PlatformStaffStatus;
