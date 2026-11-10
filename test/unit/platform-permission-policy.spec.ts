@@ -32,7 +32,7 @@ describe('platform superadmin permission policy', () => {
 		role('platform.owner', false),
 		role('platform.operator', true),
 		role('superadmin', true),
-		role('gym.owner', true),
+		role('organization.owner', true),
 	])('does not elevate lookalike or non-system roles: %p', (assignment) => {
 		expect(isPlatformSuperadmin([assignment])).toBe(false);
 		expect(effectivePlatformPermissions([assignment])).toEqual([]);
