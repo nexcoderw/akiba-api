@@ -2,7 +2,6 @@ import {
 	Controller,
 	Get,
 	Header,
-	NotFoundException,
 	Param,
 	ParseUUIDPipe,
 	Req,
@@ -18,25 +17,30 @@ import {
 	ApiTags,
 	ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { OrganizationStatus } from '@nexcoderw/akiba-db';
 
+import { AccessBoundary, TenantIdentityRead } from '../../../common/security/route-access.decorator.js';
 import { ApiErrorResponseDto } from '../../../common/dto/api-error-response.dto.js';
 import { OwnerOriginCsrfGuard } from '../auth/owner-origin-csrf.guard.js';
 import type { OwnerRequest } from '../auth/owner-request.js';
-import { OwnerSessionGuard } from '../auth/owner-session.guard.js';
+import { OrganizationTenantGuard } from '../tenant/organization-tenant.guard.js';
+import { TenantAuthorizationService } from '../tenant/tenant-authorization.service.js';
+import { TenantPortalService } from '../tenant/tenant-portal.service.js';
 import { OwnerDashboardResponseDto } from './dto/owner-dashboard-response.dto.js';
 
 @ApiTags('Organization Portal')
+@AccessBoundary('organization')
 @Controller('owner/organizations')
-@UseGuards(OwnerOriginCsrfGuard, OwnerSessionGuard)
+@UseGuards(OwnerOriginCsrfGuard, OrganizationTenantGuard)
 @ApiCookieAuth('owner-session')
 export class OwnerPortalController {
+	constructor(private readonly access: TenantAuthorizationService, private readonly portal: TenantPortalService) {}
+	@TenantIdentityRead()
 	@Get(':organizationId/dashboard')
 	@Header('Cache-Control', 'no-store')
 	@ApiOperation({
 		summary: 'Read authorized organization portal identity',
 		description:
-			'Requires a live ACTIVE membership and organization-scoped owner role. ACTIVE and PENDING organizations may read identity; PENDING status grants no operational access. A global session alone grants no tenant access.',
+			'Requires an origin-bound owner session, trusted host, ACTIVE organization and current system owner membership. Scope is rechecked inside the tenant transaction; pending and unavailable organizations share a safe denial.',
 	})
 	@ApiOkResponse({ type: OwnerDashboardResponseDto })
 	@ApiUnauthorizedResponse({ type: ApiErrorResponseDto })
@@ -46,35 +50,7 @@ export class OwnerPortalController {
 	dashboard(
 		@Param('organizationId', new ParseUUIDPipe()) organizationId: string,
 		@Req() request: OwnerRequest,
-	): OwnerDashboardResponseDto {
-		const access = request.ownerPrincipal?.organizations.find(
-			(organization) =>
-				organization.organizationId === organizationId && organization.roles.includes('owner'),
-		);
-		if (access === undefined) {
-			throw new NotFoundException({
-				code: 'OWNER_ORGANIZATION_NOT_FOUND',
-				message: 'Organization access was not found.',
-			});
-		}
-		if (
-			access.status !== OrganizationStatus.ACTIVE &&
-			access.status !== OrganizationStatus.PENDING
-		) {
-			throw new NotFoundException({
-				code: 'OWNER_ORGANIZATION_UNAVAILABLE',
-				message: 'Organization operations are unavailable.',
-			});
-		}
-		return {
-			organizationId: access.organizationId,
-			organizationName: access.name,
-			organizationSlug: access.slug,
-			membershipId: access.membershipId,
-			organizationStatus: access.status,
-			operationalAccess:
-				access.status === OrganizationStatus.ACTIVE ? 'available' : 'pending_activation',
-			roles: [...access.roles],
-		};
+	): Promise<OwnerDashboardResponseDto> {
+		return this.portal.identity(this.access.fromRequest(request), organizationId);
 	}
 }
