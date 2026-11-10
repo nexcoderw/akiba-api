@@ -2,7 +2,7 @@
 
 ## Standards
 
-Keep NEXCODE platform billing separate from gym-member billing in authorization, records, reporting,
+Keep Akiba platform billing separate from organization commercial operations in authorization, records, reporting,
 and reconciliation. Model trials, grace, renewal, cancellation, upgrades/downgrades, refunds, and
 entitlement timing explicitly. Use idempotency keys, verified provider webhooks, immutable external
 references, and integer whole-franc RWF amounts.
