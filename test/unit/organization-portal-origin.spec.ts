@@ -57,12 +57,22 @@ describe('organization portal origin policy', () => {
 		).toThrow('instead of a fixed portal origin');
 	});
 	it('supports explicit tenant development domains without permitting them in production', () => {
-		const local = parseOrganizationPortalOriginPolicy({ ORGANIZATION_PORTAL_BASE_DOMAIN: 'akiba.localhost' }, false);
-		expect(organizationSlugFromPortalOrigin('http://musomesa.akiba.localhost:4001', local)).toBe('musomesa');
-		expect(organizationSlugFromPortalOrigin('http://companyb.akiba.localhost:4001', local)).toBe('companyb');
+		const local = parseOrganizationPortalOriginPolicy(
+			{ ORGANIZATION_PORTAL_BASE_DOMAIN: 'akiba.localhost' },
+			false,
+		);
+		expect(organizationSlugFromPortalOrigin('http://musomesa.akiba.localhost:4001', local)).toBe(
+			'musomesa',
+		);
+		expect(organizationSlugFromPortalOrigin('http://companyb.akiba.localhost:4001', local)).toBe(
+			'companyb',
+		);
 		expect(organizationSlugFromPortalOrigin('http://admin.akiba.localhost:4001', local)).toBeNull();
-		expect(() => parseOrganizationPortalOriginPolicy({ ORGANIZATION_PORTAL_BASE_DOMAIN: 'akiba.localhost' }, true))
-			.toThrow('production DNS');
+		expect(() =>
+			parseOrganizationPortalOriginPolicy(
+				{ ORGANIZATION_PORTAL_BASE_DOMAIN: 'akiba.localhost' },
+				true,
+			),
+		).toThrow('production DNS');
 	});
-
 });
