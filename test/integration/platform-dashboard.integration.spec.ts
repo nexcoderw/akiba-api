@@ -30,10 +30,12 @@ describe('PlatformDashboardModule adapter integration (no PostgreSQL)', () => {
 	});
 
 	beforeEach(async () => {
-		database.sessionFindUnique.mockResolvedValue(organizationSessionFixture(Object.values(PLATFORM_PERMISSION)));
-		principal = await module.get(PlatformSessionService).authenticate(
-			'fictional-integration-session-with-at-least-32-characters',
+		database.sessionFindUnique.mockResolvedValue(
+			organizationSessionFixture(Object.values(PLATFORM_PERMISSION)),
 		);
+		principal = await module
+			.get(PlatformSessionService)
+			.authenticate('fictional-integration-session-with-at-least-32-characters');
 		database.runTransaction.mockClear();
 	});
 
@@ -72,7 +74,9 @@ describe('PlatformDashboardModule adapter integration (no PostgreSQL)', () => {
 		database.roleCount.mockResolvedValue(2);
 		database.permissionCount.mockResolvedValue(3);
 
-		expect(await module.get(PlatformDashboardController).getSummary({ platformPrincipal: principal })).toMatchObject({
+		expect(
+			await module.get(PlatformDashboardController).getSummary({ platformPrincipal: principal }),
+		).toMatchObject({
 			globalUsers: { total: 4 },
 			platformStaff: { total: 3, active: 2, pending: 1, suspended: 0, revoked: 0 },
 			platformRoles: { total: 2 },
@@ -87,7 +91,9 @@ describe('PlatformDashboardModule adapter integration (no PostgreSQL)', () => {
 		database.staffGroupBy.mockResolvedValue([]);
 		database.roleCount.mockResolvedValue(0);
 		database.permissionCount.mockResolvedValue(0);
-		expect(await module.get(PlatformDashboardController).getSummary({ platformPrincipal: principal })).toMatchObject({
+		expect(
+			await module.get(PlatformDashboardController).getSummary({ platformPrincipal: principal }),
+		).toMatchObject({
 			globalUsers: { total: 0 },
 			platformStaff: { total: 0, active: 0, pending: 0, suspended: 0, revoked: 0 },
 			platformRoles: { total: 0 },
