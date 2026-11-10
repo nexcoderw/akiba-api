@@ -4,7 +4,7 @@ import {
 	PlatformStaffStatus,
 	UserStatus,
 	type Organization,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 
 import { createPlatformDashboardDatabaseFixture } from './platform-dashboard-database.fixture.js';
 
@@ -14,8 +14,8 @@ export const ORGANIZATION_TIME = new Date('2026-10-13T12:00:00.000Z');
 export function organizationFixture(): Organization {
 	return {
 		id: ORGANIZATION_ID,
-		name: 'Soho Gym',
-		slug: 'soho',
+		name: 'Kimihurura Supplies',
+		slug: 'kimihurura',
 		status: OrganizationStatus.PENDING,
 		createdAt: ORGANIZATION_TIME,
 		updatedAt: ORGANIZATION_TIME,
