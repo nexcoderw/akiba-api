@@ -36,6 +36,9 @@ import { PlatformModule } from './modules/platform/platform.module.js';
 		OwnerModule,
 		PlatformModule,
 	],
-	providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }, { provide: APP_GUARD, useClass: RouteAccessGuard }],
+	providers: [
+		{ provide: APP_GUARD, useClass: ThrottlerGuard },
+		{ provide: APP_GUARD, useClass: RouteAccessGuard },
+	],
 })
 export class AppModule {}
