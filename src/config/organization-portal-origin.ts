@@ -12,7 +12,12 @@ export function parseOrganizationPortalOriginPolicy(
 ): OrganizationPortalOriginPolicy {
 	if (!production) {
 		if (input.ORGANIZATION_PORTAL_BASE_DOMAIN !== undefined) {
-			throw new Error('ORGANIZATION_PORTAL_BASE_DOMAIN is production-only.');
+			const value = input.ORGANIZATION_PORTAL_BASE_DOMAIN;
+			if (typeof value !== 'string' || !/^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.localhost$/u.test(value) ||
+				input.ORGANIZATION_PORTAL_ORIGIN !== undefined) {
+				throw new Error('ORGANIZATION_PORTAL_BASE_DOMAIN is production-only except explicit .localhost domains.');
+			}
+			return { fixedOrigin: null, baseDomain: value };
 		}
 		const fixedOrigin = exactOrigin(
 			input.ORGANIZATION_PORTAL_ORIGIN ?? fallbackOrigin,
@@ -35,6 +40,7 @@ export function parseOrganizationPortalOriginPolicy(
 		baseDomain.length > 253 ||
 		baseDomain.endsWith('.invalid') ||
 		baseDomain.endsWith('.test') ||
+		baseDomain.endsWith('.localhost') ||
 		baseDomain === 'localhost' ||
 		!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/u.test(baseDomain)
 	) {
@@ -60,8 +66,8 @@ export function organizationSlugFromPortalOrigin(
 	}
 	if (
 		origin.origin !== value ||
-		origin.protocol !== 'https:' ||
-		origin.port !== '' ||
+		(origin.protocol !== 'https:' && !(policy.baseDomain.endsWith('.localhost') && origin.protocol === 'http:')) ||
+		(origin.port !== '' && !policy.baseDomain.endsWith('.localhost')) ||
 		origin.username !== '' ||
 		origin.password !== '' ||
 		origin.pathname !== '/' ||
