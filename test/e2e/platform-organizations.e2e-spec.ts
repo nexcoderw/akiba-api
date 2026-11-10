@@ -8,7 +8,7 @@ import {
 	PlatformStaffStatus,
 	PrismaService,
 	UserStatus,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 import request from 'supertest';
 
 import { configureApplication } from '../../src/app-bootstrap.js';
@@ -44,13 +44,13 @@ const ROUTES = [
 		method: 'post',
 		path: ROOT,
 		permission: ORGANIZATION_PERMISSION.create,
-		body: { name: 'Soho Gym', slug: 'soho' },
+		body: { name: 'Kimihurura Supplies', slug: 'kimihurura' },
 	},
 	{
 		method: 'patch',
 		path: `${ROOT}/${ORGANIZATION_ID}`,
 		permission: ORGANIZATION_PERMISSION.update,
-		body: { name: 'Power Gym' },
+		body: { name: 'Remera Trading' },
 	},
 	{
 		method: 'post',
@@ -132,7 +132,7 @@ describe('organization HTTP security (real guards, fake persistence)', () => {
 			previous.activatedAt = ORGANIZATION_TIME;
 		}
 		const result = { ...previous, updatedAt: new Date(ORGANIZATION_TIME.getTime() + 1) };
-		if (route.permission === ORGANIZATION_PERMISSION.update) result.name = 'Power Gym';
+		if (route.permission === ORGANIZATION_PERMISSION.update) result.name = 'Remera Trading';
 		if (route.permission === ORGANIZATION_PERMISSION.activate) {
 			result.status = OrganizationStatus.ACTIVE;
 		}
@@ -244,7 +244,11 @@ describe('organization HTTP security (real guards, fake persistence)', () => {
 			.set('Cookie', COOKIE)
 			.expect(200);
 		const body: unknown = response.body;
-		expect(body).toMatchObject({ id: ORGANIZATION_ID, name: 'Soho Gym', status: 'PENDING' });
+		expect(body).toMatchObject({
+			id: ORGANIZATION_ID,
+			name: 'Kimihurura Supplies',
+			status: 'PENDING',
+		});
 		expect(JSON.stringify(body)).not.toContain(SESSION_TOKEN);
 		expect(response.get('ETag')).toBe(`"${ORGANIZATION_TIME.toISOString()}"`);
 		for (const path of [
@@ -269,7 +273,7 @@ describe('organization HTTP security (real guards, fake persistence)', () => {
 		await call(ROUTES[0]).expect(403);
 	});
 	it('denies a tenant cookie and preserves dashboard/session endpoints', async () => {
-		await call(ROUTES[0], `gym-user-session=${SESSION_TOKEN}`).expect(401);
+		await call(ROUTES[0], `organization-user-session=${SESSION_TOKEN}`).expect(401);
 		database.sessionFindUnique.mockResolvedValue(
 			organizationSessionFixture(['platform.dashboard.read']),
 		);
@@ -299,14 +303,23 @@ describe('organization HTTP security (real guards, fake persistence)', () => {
 			try {
 				const response = await call(route).expect(503);
 				const body: unknown = response.body;
-				expect(body).toMatchObject({ error: { code: 'ORGANIZATION_AUDIT_UNAVAILABLE' } });
+				expect(body).toMatchObject({ code: 'ORGANIZATION_AUDIT_UNAVAILABLE' });
 				expect(database.auditCreate).toHaveBeenCalledTimes(1);
 				expect(JSON.stringify(body)).not.toContain('private audit failure');
-				expect(accessLog).toHaveBeenCalledWith(
-					expect.stringContaining(`${route.method.toUpperCase()} ${route.path} 503 `),
-				);
-				expect(accessLog).not.toHaveBeenCalledWith(
-					expect.stringContaining(`${route.method.toUpperCase()} ${route.path} 201 `),
+				const records: unknown[] = accessLog.mock.calls.map(([entry]) => {
+					if (typeof entry !== 'string') return null;
+					try {
+						return JSON.parse(entry) as unknown;
+					} catch {
+						return null;
+					}
+				});
+				expect(records).toContainEqual(
+					expect.objectContaining({
+						event: 'request.completed',
+						status: 503,
+						errorCode: 'ORGANIZATION_AUDIT_UNAVAILABLE',
+					}),
 				);
 			} finally {
 				errorLog.mockRestore();
@@ -328,6 +341,7 @@ describe('organization HTTP security (real guards, fake persistence)', () => {
 	});
 	it('documents every route and the atomic audit failure boundary', () => {
 		const document = createOpenApiDocument(app());
+		expect(document.servers?.[0]?.url).toBe('/');
 		expect(document.paths['/api/v1/platform/organizations']?.get?.security).toEqual([
 			{ 'platform-session': [] },
 		]);
