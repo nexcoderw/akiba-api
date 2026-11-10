@@ -14,8 +14,8 @@ import { PlatformModule } from './modules/platform/platform.module.js';
 	imports: [
 		ConfigModule.forRoot({
 			cache: true,
-			envFilePath: ['.env.local'],
-			ignoreEnvFile: process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'production',
+			envFilePath: process.env.NODE_ENV === 'production' ? '.env.production' : '.env.local',
+			ignoreEnvFile: process.env.NODE_ENV === 'test',
 			isGlobal: true,
 			validate: validateEnvironment,
 		}),
