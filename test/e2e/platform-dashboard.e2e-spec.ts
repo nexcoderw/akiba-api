@@ -6,6 +6,8 @@ import { getOptionsToken } from '@nestjs/throttler';
 import { PlatformStaffStatus, PrismaService, UserStatus } from '@nexcoderw/akiba-db';
 import request from 'supertest';
 
+import { DatabaseIntegrationModule } from '../../src/infrastructure/database/database-integration.module.js';
+import { OfflineDatabaseModule } from '../fixtures/offline-database.module.js';
 import { configureApplication } from '../../src/app-bootstrap.js';
 import { AppModule } from '../../src/app.module.js';
 import { validateEnvironment } from '../../src/config/environment.validation.js';
@@ -268,6 +270,8 @@ async function createApplication(
 	limit: number,
 ): Promise<NestExpressApplication> {
 	const module = await Test.createTestingModule({ imports: [AppModule] })
+		.overrideModule(DatabaseIntegrationModule)
+		.useModule(OfflineDatabaseModule)
 		.overrideProvider(PrismaService)
 		.useValue(database.prisma)
 		.overrideProvider(getOptionsToken())
