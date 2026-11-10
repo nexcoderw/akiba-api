@@ -20,8 +20,11 @@ import {
 
 import type { PlatformPrincipal } from '../../src/modules/platform/auth/platform-auth.types.js';
 import { PlatformSessionService } from '../../src/modules/platform/auth/platform-session.service.js';
-import { PlatformServiceAuthModule, PLATFORM_SERVICE_AUTH_DATABASE } from '../fixtures/platform-service-auth.module.js';
-import { createPlatformDashboardDatabaseFixture } from '../fixtures/platform-dashboard-database.fixture.js';
+import {
+	PlatformServiceAuthModule,
+	PLATFORM_SERVICE_AUTH_DATABASE,
+} from '../fixtures/platform-service-auth.module.js';
+import type { createPlatformDashboardDatabaseFixture } from '../fixtures/platform-dashboard-database.fixture.js';
 
 describe('organization service contracts (adapter fake, not PostgreSQL)', () => {
 	let module: TestingModule;
@@ -49,9 +52,9 @@ describe('organization service contracts (adapter fake, not PostgreSQL)', () => 
 				{ provide: PlatformOrganizationAudit, useValue: { assertAvailable: available, record } },
 			],
 		}).compile();
-		principal = await module.get(PlatformSessionService).authenticate(
-			'fictional-service-session-with-at-least-32-characters',
-		);
+		principal = await module
+			.get(PlatformSessionService)
+			.authenticate('fictional-service-session-with-at-least-32-characters');
 		reads = module.get(PlatformOrganizationsService);
 		writes = module.get(PlatformOrganizationMutationsService);
 	});
@@ -63,13 +66,16 @@ describe('organization service contracts (adapter fake, not PostgreSQL)', () => 
 		for (const identity of [undefined, { ...principal }]) {
 			await expect(reads.get(identity, ORGANIZATION_ID)).rejects.toMatchObject({ status: 403 });
 			await expect(reads.list(identity, { limit: 20 })).rejects.toMatchObject({ status: 403 });
-			await expect(writes.create(context, identity, { name: 'Fictional', slug: 'fictional' }))
-				.rejects.toMatchObject({ status: 403 });
-			await expect(writes.update(context, identity, ORGANIZATION_ID, { name: 'Fictional' }, ORGANIZATION_TIME))
-				.rejects.toMatchObject({ status: 403 });
+			await expect(
+				writes.create(context, identity, { name: 'Fictional', slug: 'fictional' }),
+			).rejects.toMatchObject({ status: 403 });
+			await expect(
+				writes.update(context, identity, ORGANIZATION_ID, { name: 'Fictional' }, ORGANIZATION_TIME),
+			).rejects.toMatchObject({ status: 403 });
 			for (const action of ['activation', 'suspension', 'archival'] as const) {
-				await expect(writes.lifecycle(context, identity, ORGANIZATION_ID, action, ORGANIZATION_TIME))
-					.rejects.toMatchObject({ status: 403 });
+				await expect(
+					writes.lifecycle(context, identity, ORGANIZATION_ID, action, ORGANIZATION_TIME),
+				).rejects.toMatchObject({ status: 403 });
 			}
 		}
 		expect(database.runTransaction).not.toHaveBeenCalled();
@@ -80,13 +86,19 @@ describe('organization service contracts (adapter fake, not PostgreSQL)', () => 
 		const authorization = module.get<ReturnType<typeof createPlatformDashboardDatabaseFixture>>(
 			PLATFORM_SERVICE_AUTH_DATABASE,
 		);
-		authorization.sessionFindUnique.mockResolvedValue(organizationSessionFixture(['platform.dashboard.read']));
+		authorization.sessionFindUnique.mockResolvedValue(
+			organizationSessionFixture(['platform.dashboard.read']),
+		);
 		await expect(reads.list(principal, { limit: 20 })).rejects.toMatchObject({ status: 403 });
-		await expect(writes.create(context, principal, { name: 'Fictional', slug: 'fictional' }))
-			.rejects.toMatchObject({ status: 403 });
-		await expect(writes.create({ ...context, actorPlatformStaffId: ORGANIZATION_ID }, principal, {
-			name: 'Fictional', slug: 'fictional',
-		})).rejects.toMatchObject({ status: 403 });
+		await expect(
+			writes.create(context, principal, { name: 'Fictional', slug: 'fictional' }),
+		).rejects.toMatchObject({ status: 403 });
+		await expect(
+			writes.create({ ...context, actorPlatformStaffId: ORGANIZATION_ID }, principal, {
+				name: 'Fictional',
+				slug: 'fictional',
+			}),
+		).rejects.toMatchObject({ status: 403 });
 		expect(database.runTransaction).not.toHaveBeenCalled();
 		expect(Object.isFrozen(principal)).toBe(true);
 		expect(Object.isFrozen(principal.permissions)).toBe(true);
@@ -115,7 +127,9 @@ describe('organization service contracts (adapter fake, not PostgreSQL)', () => 
 	});
 	it('rejects stale cursor and oversized pages without unbounded reads', async () => {
 		database.findFirst.mockResolvedValue(null);
-		await expect(reads.list(principal, { limit: 20, cursor: ORGANIZATION_ID })).rejects.toMatchObject({
+		await expect(
+			reads.list(principal, { limit: 20, cursor: ORGANIZATION_ID }),
+		).rejects.toMatchObject({
 			status: 400,
 		});
 		await expect(reads.list(principal, { limit: 51 })).rejects.toMatchObject({ status: 400 });
@@ -140,7 +154,10 @@ describe('organization service contracts (adapter fake, not PostgreSQL)', () => 
 		async (code) => {
 			const cause = { code, message: 'private provider diagnostic', meta: { secret: 'private' } };
 			database.runTransaction.mockRejectedValueOnce(cause);
-			await expect(reads.list(principal, { limit: 20 })).rejects.toMatchObject({ status: 503, cause });
+			await expect(reads.list(principal, { limit: 20 })).rejects.toMatchObject({
+				status: 503,
+				cause,
+			});
 			expect(database.runTransaction).toHaveBeenCalledTimes(1);
 			expect(database.findMany).not.toHaveBeenCalled();
 			const failure = organizationFailure(cause);
@@ -206,7 +223,13 @@ describe('organization service contracts (adapter fake, not PostgreSQL)', () => 
 			...organizationFixture(),
 			name: 'Remera Trading',
 		});
-		await writes.update(context, principal, ORGANIZATION_ID, { name: 'Remera Trading' }, ORGANIZATION_TIME);
+		await writes.update(
+			context,
+			principal,
+			ORGANIZATION_ID,
+			{ name: 'Remera Trading' },
+			ORGANIZATION_TIME,
+		);
 		expect(database.updateMany.mock.calls[0]?.[0]).toMatchObject({
 			where: {
 				id: ORGANIZATION_ID,
@@ -278,7 +301,13 @@ describe('organization service contracts (adapter fake, not PostgreSQL)', () => 
 			status: OrganizationStatus.ARCHIVED,
 		});
 		await expect(
-			writes.update(context, principal, ORGANIZATION_ID, { name: 'Remera Trading' }, ORGANIZATION_TIME),
+			writes.update(
+				context,
+				principal,
+				ORGANIZATION_ID,
+				{ name: 'Remera Trading' },
+				ORGANIZATION_TIME,
+			),
 		).rejects.toMatchObject({ status: 409 });
 		for (const action of ['activation', 'suspension', 'archival'] as const) {
 			await expect(
@@ -299,7 +328,13 @@ describe('organization service contracts (adapter fake, not PostgreSQL)', () => 
 			status: 503,
 		});
 		await expect(
-			writes.update(context, principal, ORGANIZATION_ID, { name: 'Remera Trading' }, ORGANIZATION_TIME),
+			writes.update(
+				context,
+				principal,
+				ORGANIZATION_ID,
+				{ name: 'Remera Trading' },
+				ORGANIZATION_TIME,
+			),
 		).rejects.toMatchObject({ status: 503 });
 		await expect(
 			writes.lifecycle(context, principal, ORGANIZATION_ID, 'activation', ORGANIZATION_TIME),
