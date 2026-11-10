@@ -83,7 +83,10 @@ export class PlatformOrganizationsController {
 			'Requires platform.organizations.read. Default excludes archived organizations; use status=ARCHIVED to inspect retained records. Default 20, maximum 50; createdAt descending then UUID ascending. Keep the status filter; unavailable cursor returns 400.',
 	})
 	@ApiOkResponse({ type: OrganizationListResponseDto })
-	list(@Query() query: ListOrganizationsQueryDto, @Req() request: Pick<PlatformRequest, 'platformPrincipal'>): Promise<OrganizationListResponseDto> {
+	list(
+		@Query() query: ListOrganizationsQueryDto,
+		@Req() request: Pick<PlatformRequest, 'platformPrincipal'>,
+	): Promise<OrganizationListResponseDto> {
 		return this.organizations.list(request.platformPrincipal, query);
 	}
 
@@ -156,7 +159,8 @@ export class PlatformOrganizationsController {
 		@Req() request: PlatformRequest,
 	): Promise<OrganizationResponseDto> {
 		return this.mutations.update(
-			this.context(request), request.platformPrincipal,
+			this.context(request),
+			request.platformPrincipal,
 			id,
 			input,
 			organizationPrecondition(precondition),
@@ -185,7 +189,8 @@ export class PlatformOrganizationsController {
 		@Req() request: PlatformRequest,
 	): Promise<OrganizationResponseDto> {
 		return this.mutations.lifecycle(
-			this.context(request), request.platformPrincipal,
+			this.context(request),
+			request.platformPrincipal,
 			id,
 			'activation',
 			organizationPrecondition(`"${input.expectedUpdatedAt}"`),
@@ -214,7 +219,8 @@ export class PlatformOrganizationsController {
 		@Req() request: PlatformRequest,
 	): Promise<OrganizationResponseDto> {
 		return this.mutations.lifecycle(
-			this.context(request), request.platformPrincipal,
+			this.context(request),
+			request.platformPrincipal,
 			id,
 			'suspension',
 			organizationPrecondition(`"${input.expectedUpdatedAt}"`),
@@ -243,7 +249,8 @@ export class PlatformOrganizationsController {
 		@Req() request: PlatformRequest,
 	): Promise<OrganizationResponseDto> {
 		return this.mutations.lifecycle(
-			this.context(request), request.platformPrincipal,
+			this.context(request),
+			request.platformPrincipal,
 			id,
 			'archival',
 			organizationPrecondition(`"${input.expectedUpdatedAt}"`),
