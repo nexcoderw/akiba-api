@@ -26,6 +26,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 
+import { AccessBoundary } from '../../../common/security/route-access.decorator.js';
 import { ApiErrorResponseDto } from '../../../common/dto/api-error-response.dto.js';
 import {
 	OwnerAuthenticatedResponseDto,
@@ -52,6 +53,7 @@ export class OwnerAuthController {
 		private readonly tokens: OwnerTokenService,
 	) {}
 
+	@AccessBoundary('public')
 	@Post('login')
 	@HttpCode(HttpStatus.OK)
 	@Header('Cache-Control', 'no-store')
@@ -80,11 +82,12 @@ export class OwnerAuthController {
 			request.ownerOrganizationSlug,
 		);
 		const csrfToken = this.tokens.create();
-		this.cookies.setSession(response, result.sessionToken, result.expiresAtDate);
+		this.cookies.setSession(response, result.sessionToken, result.expiresAtDate, request.headers.origin ?? '');
 		this.cookies.setCsrf(response, csrfToken, result.expiresAtDate);
 		return { status: 'authenticated', expiresAt: result.expiresAt, csrfToken };
 	}
 
+	@AccessBoundary('owner-session')
 	@Get('session')
 	@Header('Cache-Control', 'no-store')
 	@UseGuards(OwnerOriginCsrfGuard, OwnerSessionGuard)
@@ -113,6 +116,7 @@ export class OwnerAuthController {
 		};
 	}
 
+	@AccessBoundary('public')
 	@Post('logout')
 	@HttpCode(HttpStatus.NO_CONTENT)
 	@Header('Cache-Control', 'no-store')
