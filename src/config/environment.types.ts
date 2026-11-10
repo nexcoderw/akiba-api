@@ -8,6 +8,8 @@ export type NodeEnvironment = (typeof NODE_ENVIRONMENTS)[number];
 export interface EnvironmentVariables {
 	readonly NODE_ENV: NodeEnvironment;
 	readonly API_PUBLIC_ORIGIN: string;
+	readonly PASSWORD_BLOCKLIST_FILE: string | null;
+	readonly PASSWORD_BLOCKLIST_SHA256: string | null;
 	readonly HOST: string;
 	readonly PORT: number;
 	readonly BODY_LIMIT_BYTES: number;
