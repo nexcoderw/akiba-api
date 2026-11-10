@@ -27,6 +27,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 
+import { AccessBoundary } from '../../../common/security/route-access.decorator.js';
 import { ApiErrorResponseDto } from '../../../common/dto/api-error-response.dto.js';
 import {
 	PlatformMfaChallengeResponseDto,
@@ -61,6 +62,7 @@ export class PlatformAuthController {
 		private readonly emailOtp: PlatformEmailOtpService,
 	) {}
 
+	@AccessBoundary('public')
 	@Post('login')
 	@HttpCode(HttpStatus.OK)
 	@Header('Cache-Control', 'no-store')
@@ -106,6 +108,7 @@ export class PlatformAuthController {
 		return result;
 	}
 
+	@AccessBoundary('public')
 	@Post('mfa/email')
 	@HttpCode(HttpStatus.OK)
 	@Header('Cache-Control', 'no-store')
@@ -141,6 +144,7 @@ export class PlatformAuthController {
 		return this.emailOtp.send(input.challengeToken);
 	}
 
+	@AccessBoundary('public')
 	@Post('mfa/verify')
 	@HttpCode(HttpStatus.OK)
 	@Header('Cache-Control', 'no-store')
@@ -184,6 +188,7 @@ export class PlatformAuthController {
 		return { status: result.status, expiresAt: result.expiresAt, csrfToken };
 	}
 
+	@AccessBoundary('platform-session')
 	@Get('session')
 	@Header('Cache-Control', 'no-store')
 	@UseGuards(PlatformOriginCsrfGuard, PlatformSessionGuard)
@@ -225,6 +230,7 @@ export class PlatformAuthController {
 		};
 	}
 
+	@AccessBoundary('public')
 	@Post('logout')
 	@HttpCode(HttpStatus.NO_CONTENT)
 	@Header('Cache-Control', 'no-store')
