@@ -87,7 +87,7 @@ interface OrganizationSessionFixture {
 			displayName: string;
 			status: UserStatus;
 			emailVerifiedAt: Date | null;
-			passwordCredential: { passwordChangedAt: Date };
+			passwordCredential: { passwordChangedAt: Date; disabledAt: Date | null };
 		};
 		roles: {
 			platformRole: {
@@ -119,7 +119,7 @@ export function organizationSessionFixture(
 				displayName: 'Fictional Operator',
 				status: UserStatus.ACTIVE,
 				emailVerifiedAt: new Date(now - 86_400_000),
-				passwordCredential: { passwordChangedAt: new Date(now - 86_400_000) },
+				passwordCredential: { passwordChangedAt: new Date(now - 86_400_000), disabledAt: null },
 			},
 			roles: [
 				{
