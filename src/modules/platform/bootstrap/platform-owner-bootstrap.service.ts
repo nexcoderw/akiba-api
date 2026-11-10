@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { isEmail } from 'class-validator';
-import { PlatformStaffStatus, Prisma, PrismaService, UserStatus } from '@nexcoderw/gym-db';
+import { PlatformStaffStatus, Prisma, PrismaService, UserStatus } from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
 import { PlatformPasswordService } from '../auth/platform-password.service.js';
