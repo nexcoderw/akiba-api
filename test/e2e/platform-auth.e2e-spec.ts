@@ -2,7 +2,7 @@ import { jest } from '@jest/globals';
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { PrismaService } from '@nexcoderw/gym-db';
+import { PrismaService } from '@nexcoderw/akiba-db';
 import request from 'supertest';
 
 import { configureApplication } from '../../src/app-bootstrap.js';
@@ -56,7 +56,7 @@ describe('platform authentication HTTP API (e2e)', () => {
 			sessionId: '62d5bd74-9018-4d15-a353-2cb2a72c1887',
 			userId: '2f5298af-cf42-4e66-8968-a42be74cb34b',
 			platformStaffId: 'a652ac64-47b5-499e-a849-dca02166c46b',
-			displayName: 'NEXCODE Administrator',
+			displayName: 'Akiba Administrator',
 			email: 'admin@example.com',
 			expiresAt: new Date('2030-01-01T08:00:00.000Z'),
 			roles: ['platform.operator'],
@@ -103,7 +103,7 @@ describe('platform authentication HTTP API (e2e)', () => {
 		const response = await request(requireApplication(application).getHttpServer())
 			.post('/api/v1/platform/auth/mfa/email')
 			.set('Origin', ADMIN_ORIGIN)
-			.set('Cookie', `nexcode-platform-csrf=${CSRF_TOKEN}`)
+			.set('Cookie', `akiba-platform-csrf=${CSRF_TOKEN}`)
 			.set('X-Platform-CSRF-Token', CSRF_TOKEN)
 			.send({ challengeToken: 'fictional-challenge-token-with-more-than-32-characters' })
 			.expect(200);
@@ -140,8 +140,8 @@ describe('platform authentication HTTP API (e2e)', () => {
 			'fictional-challenge-token-with-more-than-32-characters',
 		);
 		const cookies = response.get('Set-Cookie') ?? [];
-		expect(cookies.some((cookie) => cookie.startsWith('nexcode-platform-csrf='))).toBe(true);
-		expect(cookies.some((cookie) => cookie.startsWith('nexcode-platform-session='))).toBe(false);
+		expect(cookies.some((cookie) => cookie.startsWith('akiba-platform-csrf='))).toBe(true);
+		expect(cookies.some((cookie) => cookie.startsWith('akiba-platform-session='))).toBe(false);
 		const loginCall = login.mock.calls[0];
 		if (loginCall === undefined) {
 			throw new Error('Expected the login service to be called.');
@@ -187,7 +187,7 @@ describe('platform authentication HTTP API (e2e)', () => {
 		const response = await request(requireApplication(application).getHttpServer())
 			.post('/api/v1/platform/auth/mfa/verify')
 			.set('Origin', ADMIN_ORIGIN)
-			.set('Cookie', `nexcode-platform-csrf=${CSRF_TOKEN}`)
+			.set('Cookie', `akiba-platform-csrf=${CSRF_TOKEN}`)
 			.set('x-platform-csrf-token', CSRF_TOKEN)
 			.send({
 				challengeToken: 'fictional-challenge-token-with-more-than-32-characters',
@@ -196,7 +196,7 @@ describe('platform authentication HTTP API (e2e)', () => {
 			})
 			.expect(200);
 		const cookies = response.get('Set-Cookie') ?? [];
-		const sessionCookie = cookies.find((cookie) => cookie.startsWith('nexcode-platform-session='));
+		const sessionCookie = cookies.find((cookie) => cookie.startsWith('akiba-platform-session='));
 		expect(sessionCookie).toContain('HttpOnly');
 		expect(sessionCookie).toContain('SameSite=Strict');
 		expect(sessionCookie).toContain('Path=/');
@@ -207,7 +207,7 @@ describe('platform authentication HTTP API (e2e)', () => {
 		const response = await request(requireApplication(application).getHttpServer())
 			.get('/api/v1/platform/auth/session')
 			.set('Origin', ADMIN_ORIGIN)
-			.set('Cookie', `nexcode-platform-session=${SESSION_TOKEN}`)
+			.set('Cookie', `akiba-platform-session=${SESSION_TOKEN}`)
 			.expect(200);
 		const body: unknown = response.body;
 		expect(isRecord(body) && body.email).toBe('admin@example.com');
@@ -224,7 +224,7 @@ describe('platform authentication HTTP API (e2e)', () => {
 	it('permits an authenticated session with the explicit permission', async () => {
 		await request(requireApplication(application).getHttpServer())
 			.get('/api/v1/platform/permission-probe')
-			.set('Cookie', `nexcode-platform-session=${SESSION_TOKEN}`)
+			.set('Cookie', `akiba-platform-session=${SESSION_TOKEN}`)
 			.expect(200, { status: 'permitted' });
 	});
 
@@ -233,7 +233,7 @@ describe('platform authentication HTTP API (e2e)', () => {
 			sessionId: '62d5bd74-9018-4d15-a353-2cb2a72c1887',
 			userId: '2f5298af-cf42-4e66-8968-a42be74cb34b',
 			platformStaffId: 'a652ac64-47b5-499e-a849-dca02166c46b',
-			displayName: 'NEXCODE Administrator',
+			displayName: 'Akiba Administrator',
 			email: 'admin@example.com',
 			expiresAt: new Date('2030-01-01T08:00:00.000Z'),
 			roles: ['platform.administrator'],
@@ -242,7 +242,7 @@ describe('platform authentication HTTP API (e2e)', () => {
 
 		await request(requireApplication(application).getHttpServer())
 			.get('/api/v1/platform/permission-probe')
-			.set('Cookie', `nexcode-platform-session=${SESSION_TOKEN}`)
+			.set('Cookie', `akiba-platform-session=${SESSION_TOKEN}`)
 			.expect(403);
 	});
 
@@ -250,14 +250,11 @@ describe('platform authentication HTTP API (e2e)', () => {
 		const response = await request(requireApplication(application).getHttpServer())
 			.post('/api/v1/platform/auth/logout')
 			.set('Origin', ADMIN_ORIGIN)
-			.set(
-				'Cookie',
-				`nexcode-platform-session=${SESSION_TOKEN}; nexcode-platform-csrf=${CSRF_TOKEN}`,
-			)
+			.set('Cookie', `akiba-platform-session=${SESSION_TOKEN}; akiba-platform-csrf=${CSRF_TOKEN}`)
 			.set('x-platform-csrf-token', CSRF_TOKEN)
 			.expect(204);
 		expect(revoke).toHaveBeenCalledWith(SESSION_TOKEN);
-		expect((response.get('Set-Cookie') ?? []).join(';')).toContain('nexcode-platform-session=;');
+		expect((response.get('Set-Cookie') ?? []).join(';')).toContain('akiba-platform-session=;');
 	});
 });
 
