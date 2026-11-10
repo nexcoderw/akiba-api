@@ -10,8 +10,14 @@ import { PlatformDashboardController } from '../../src/modules/platform/dashboar
 import { PlatformDashboardService } from '../../src/modules/platform/dashboard/platform-dashboard.service.js';
 import { createPlatformDashboardDatabaseFixture } from '../fixtures/platform-dashboard-database.fixture.js';
 
+import type { PlatformPrincipal } from '../../src/modules/platform/auth/platform-auth.types.js';
+import { PlatformSessionService } from '../../src/modules/platform/auth/platform-session.service.js';
+import { PLATFORM_PERMISSION } from '../../src/modules/platform/auth/platform-permission.constants.js';
+import { organizationSessionFixture } from '../fixtures/platform-organizations-database.fixture.js';
+
 describe('PlatformDashboardModule adapter integration (no PostgreSQL)', () => {
 	let module: TestingModule;
+	let principal: PlatformPrincipal;
 	const database = createPlatformDashboardDatabaseFixture();
 
 	beforeAll(async () => {
@@ -21,6 +27,14 @@ describe('PlatformDashboardModule adapter integration (no PostgreSQL)', () => {
 			.overrideProvider(PrismaService)
 			.useValue(database.prisma)
 			.compile();
+	});
+
+	beforeEach(async () => {
+		database.sessionFindUnique.mockResolvedValue(organizationSessionFixture(Object.values(PLATFORM_PERMISSION)));
+		principal = await module.get(PlatformSessionService).authenticate(
+			'fictional-integration-session-with-at-least-32-characters',
+		);
+		database.runTransaction.mockClear();
 	});
 
 	afterAll(async () => {
@@ -58,7 +72,7 @@ describe('PlatformDashboardModule adapter integration (no PostgreSQL)', () => {
 		database.roleCount.mockResolvedValue(2);
 		database.permissionCount.mockResolvedValue(3);
 
-		expect(await module.get(PlatformDashboardController).getSummary()).toMatchObject({
+		expect(await module.get(PlatformDashboardController).getSummary({ platformPrincipal: principal })).toMatchObject({
 			globalUsers: { total: 4 },
 			platformStaff: { total: 3, active: 2, pending: 1, suspended: 0, revoked: 0 },
 			platformRoles: { total: 2 },
@@ -73,7 +87,7 @@ describe('PlatformDashboardModule adapter integration (no PostgreSQL)', () => {
 		database.staffGroupBy.mockResolvedValue([]);
 		database.roleCount.mockResolvedValue(0);
 		database.permissionCount.mockResolvedValue(0);
-		expect(await module.get(PlatformDashboardController).getSummary()).toMatchObject({
+		expect(await module.get(PlatformDashboardController).getSummary({ platformPrincipal: principal })).toMatchObject({
 			globalUsers: { total: 0 },
 			platformStaff: { total: 0, active: 0, pending: 0, suspended: 0, revoked: 0 },
 			platformRoles: { total: 0 },
