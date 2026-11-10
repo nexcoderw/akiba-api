@@ -20,8 +20,14 @@ import {
 } from '../fixtures/platform-owner-onboarding-database.fixture.js';
 import { ORGANIZATION_ID } from '../fixtures/platform-organizations-database.fixture.js';
 
+import type { PlatformPrincipal } from '../../src/modules/platform/auth/platform-auth.types.js';
+import { PlatformSessionService } from '../../src/modules/platform/auth/platform-session.service.js';
+import { PLATFORM_PERMISSION } from '../../src/modules/platform/auth/platform-permission.constants.js';
+import { organizationSessionFixture } from '../fixtures/platform-organizations-database.fixture.js';
+
 describe('owner onboarding module integration (adapter fake; no live PostgreSQL)', () => {
 	let module: TestingModule;
+	let principal: PlatformPrincipal;
 	const database = createPlatformOwnerOnboardingDatabaseFixture();
 
 	beforeAll(async () => {
@@ -32,6 +38,14 @@ describe('owner onboarding module integration (adapter fake; no live PostgreSQL)
 			.useValue(database.prisma)
 			.compile();
 	});
+	beforeEach(async () => {
+		database.sessionFindUnique.mockResolvedValue(organizationSessionFixture(Object.values(PLATFORM_PERMISSION)));
+		principal = await module.get(PlatformSessionService).authenticate(
+			'fictional-integration-session-with-at-least-32-characters',
+		);
+		database.runTransaction.mockClear();
+	});
+
 	afterAll(async () => module.close());
 
 	it('registers the controller, service and durable audit against the shared database provider', () => {
@@ -51,6 +65,7 @@ describe('owner onboarding module integration (adapter fake; no live PostgreSQL)
 					actorPlatformStaffId: OWNER_INVITATION_ACTOR_ID,
 					requestId: 'fictional-disabled-delivery',
 				},
+				principal,
 				ORGANIZATION_ID,
 				OWNER_INVITATION_ID,
 			),
@@ -58,7 +73,7 @@ describe('owner onboarding module integration (adapter fake; no live PostgreSQL)
 			status: 503,
 			response: { code: 'OWNER_INVITATION_DELIVERY_UNAVAILABLE' },
 		});
-		expect(database.runTransaction).toHaveBeenCalledTimes(callsBefore);
+		expect(database.runTransaction).toHaveBeenCalledTimes(callsBefore + 1);
 	});
 
 	it('creates a pending invitation and an allowlisted audit record through one transaction', async () => {
@@ -68,6 +83,7 @@ describe('owner onboarding module integration (adapter fake; no live PostgreSQL)
 					actorPlatformStaffId: OWNER_INVITATION_ACTOR_ID,
 					requestId: 'fictional-owner-invitation-request',
 				},
+				principal,
 				ORGANIZATION_ID,
 				{ displayName: 'Aline Uwase', email: 'aline@example.com' },
 			),
@@ -76,7 +92,7 @@ describe('owner onboarding module integration (adapter fake; no live PostgreSQL)
 			organizationId: ORGANIZATION_ID,
 			status: 'PENDING_DELIVERY',
 		});
-		expect(database.runTransaction).toHaveBeenCalledTimes(1);
+		expect(database.runTransaction).toHaveBeenCalledTimes(2);
 		const auditCall: unknown = database.ownershipAuditCreate.mock.calls[0]?.[0];
 		expect(auditCall).toMatchObject({
 			data: {
@@ -101,6 +117,7 @@ describe('owner onboarding module integration (adapter fake; no live PostgreSQL)
 					actorPlatformStaffId: OWNER_INVITATION_ACTOR_ID,
 					requestId: 'fictional-owner-invitation-request',
 				},
+				principal,
 				ORGANIZATION_ID,
 				{ displayName: 'Aline Uwase', email: 'aline@example.com' },
 			),
