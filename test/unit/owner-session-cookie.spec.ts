@@ -1,4 +1,7 @@
-import { openOwnerSession, sealOwnerSession } from '../../src/modules/owner/auth/owner-session-cookie.js';
+import {
+	openOwnerSession,
+	sealOwnerSession,
+} from '../../src/modules/owner/auth/owner-session-cookie.js';
 
 const key = Buffer.alloc(32, 7);
 const token = 'a'.repeat(43);
@@ -13,7 +16,8 @@ describe('origin-bound organization session credentials', () => {
 		expect(openOwnerSession(cookie, a, Buffer.alloc(32, 8))).toBeUndefined();
 	});
 	it.each([undefined, token, `${token}.invalid`, 'secret-cookie', ''.padEnd(1000, 'x')])(
-		'rejects missing, legacy or malformed credentials', (value) => {
+		'rejects missing, legacy or malformed credentials',
+		(value) => {
 			expect(openOwnerSession(value, a, key)).toBeUndefined();
 		},
 	);
