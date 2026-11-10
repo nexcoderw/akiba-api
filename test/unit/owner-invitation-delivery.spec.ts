@@ -7,7 +7,7 @@ import {
 	OrganizationOwnerInvitationStatus as InvitationStatus,
 	PlatformStaffStatus,
 	PrismaService,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 
 import {
 	ResendOwnerInvitationEmailService,
@@ -244,7 +244,7 @@ describe('audited invitation delivery and worker policy', () => {
 		}
 	});
 
-	it('keeps the exact payload/key on a bounded known-rejection retry despite a gym rename', async () => {
+	it('keeps the exact payload/key on a bounded known-rejection retry despite a organization rename', async () => {
 		const fixture = await setup();
 		try {
 			fixture.send.mockResolvedValueOnce({
@@ -256,7 +256,7 @@ describe('audited invitation delivery and worker policy', () => {
 			await fixture.worker.runOnce('fictional-worker');
 			const retryAt = fixture.state.delivery?.nextAttemptAt;
 			if (retryAt === null || retryAt === undefined) throw new Error('Missing retry.');
-			fixture.state.invitation.organization.name = 'Renamed Gym';
+			fixture.state.invitation.organization.name = 'Renamed organization';
 			fixture.state.now = new Date(retryAt.getTime() + 1);
 			await fixture.worker.runOnce('fictional-worker');
 			expect(fixture.send.mock.calls[1]).toEqual(fixture.send.mock.calls[0]);
@@ -369,7 +369,7 @@ describe('audited invitation delivery and worker policy', () => {
 			});
 			await expect(fixture.service.preview(valid)).resolves.toEqual({
 				valid: true,
-				organizationName: 'Soho Gym',
+				organizationName: 'Kimihurura Supplies',
 			});
 			expect(
 				fixture.query.mock.calls.some(([parts]) =>
