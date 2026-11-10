@@ -63,11 +63,9 @@ describe('organization authorization', () => {
 			mfaVerifiedAt: null,
 			user: { passwordCredential: { disabledAt: null, passwordChangedAt: new Date('2025-01-01') } },
 		});
-		const membership = jest
-			.fn<(args: unknown) => Promise<unknown>>()
-			.mockResolvedValue({
-				roles: [role('custom.reader', false, true, [ORGANIZATION_PERMISSION.membersRead])],
-			});
+		const membership = jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({
+			roles: [role('custom.reader', false, true, [ORGANIZATION_PERMISSION.membersRead])],
+		});
 		const transaction = {
 			ownerSession: { findFirst: session },
 			organizationMembership: { findFirst: membership },
