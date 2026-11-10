@@ -2,7 +2,7 @@
 
 ## Purpose and precedence
 
-These rules govern `@nexcoderw/gym-api`. Human instructions come first, followed by `AGENTS.md` or
+These rules govern `@nexcoderw/akiba-api`. Human instructions come first, followed by `AGENTS.md` or
 `CLAUDE.md`, this index, relevant topic rules, then tool defaults. Choose the safer tenant, security,
 privacy, and financial interpretation if uncertainty remains.
 
