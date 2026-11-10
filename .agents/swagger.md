@@ -14,5 +14,5 @@ exposed production documentation.
 
 ## Example and checklist
 
-Use Soho Gym, Kimihurura, `member@example.com`, `+250 7XX XXX XXX`, RWF, and Africa/Kigali. Compare
+Use Kimihurura Supplies, Kimihurura, `member@example.com`, `+250 7XX XXX XXX`, RWF, and Africa/Kigali. Compare
 OpenAPI behavior with e2e tests before release.
