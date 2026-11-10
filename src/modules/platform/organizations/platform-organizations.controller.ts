@@ -35,6 +35,7 @@ import {
 } from '@nestjs/swagger';
 import type { Response } from 'express';
 
+import { AccessBoundary } from '../../../common/security/route-access.decorator.js';
 import { ApiErrorResponseDto } from '../../../common/dto/api-error-response.dto.js';
 import { RequirePlatformCsrf } from '../auth/platform-csrf.decorator.js';
 import { PlatformOriginCsrfGuard } from '../auth/platform-origin-csrf.guard.js';
@@ -65,6 +66,7 @@ import { PlatformOrganizationsService } from './platform-organizations.service.j
 	description: 'Persistence unavailable, or mutations blocked by ORGANIZATION_AUDIT_UNAVAILABLE.',
 })
 @UseGuards(PlatformSessionGuard, PlatformOriginCsrfGuard, PlatformPermissionGuard)
+@AccessBoundary('platform')
 @Controller('platform/organizations')
 export class PlatformOrganizationsController {
 	constructor(
@@ -81,8 +83,8 @@ export class PlatformOrganizationsController {
 			'Requires platform.organizations.read. Default excludes archived organizations; use status=ARCHIVED to inspect retained records. Default 20, maximum 50; createdAt descending then UUID ascending. Keep the status filter; unavailable cursor returns 400.',
 	})
 	@ApiOkResponse({ type: OrganizationListResponseDto })
-	list(@Query() query: ListOrganizationsQueryDto): Promise<OrganizationListResponseDto> {
-		return this.organizations.list(query);
+	list(@Query() query: ListOrganizationsQueryDto, @Req() request: Pick<PlatformRequest, 'platformPrincipal'>): Promise<OrganizationListResponseDto> {
+		return this.organizations.list(request.platformPrincipal, query);
 	}
 
 	@Get(':id')
@@ -102,8 +104,9 @@ export class PlatformOrganizationsController {
 	async get(
 		@Param('id', new ParseUUIDPipe()) id: string,
 		@Res({ passthrough: true }) response: Response,
+		@Req() request: Pick<PlatformRequest, 'platformPrincipal'>,
 	): Promise<OrganizationResponseDto> {
-		const organization = await this.organizations.get(id);
+		const organization = await this.organizations.get(request.platformPrincipal, id);
 		response.setHeader('ETag', `"${organization.updatedAt}"`);
 		return organization;
 	}
@@ -127,7 +130,7 @@ export class PlatformOrganizationsController {
 		@Body() input: CreateOrganizationDto,
 		@Req() request: PlatformRequest,
 	): Promise<OrganizationResponseDto> {
-		return this.mutations.create(this.context(request), input);
+		return this.mutations.create(this.context(request), request.platformPrincipal, input);
 	}
 
 	@Patch(':id')
@@ -153,7 +156,7 @@ export class PlatformOrganizationsController {
 		@Req() request: PlatformRequest,
 	): Promise<OrganizationResponseDto> {
 		return this.mutations.update(
-			this.context(request),
+			this.context(request), request.platformPrincipal,
 			id,
 			input,
 			organizationPrecondition(precondition),
@@ -182,7 +185,7 @@ export class PlatformOrganizationsController {
 		@Req() request: PlatformRequest,
 	): Promise<OrganizationResponseDto> {
 		return this.mutations.lifecycle(
-			this.context(request),
+			this.context(request), request.platformPrincipal,
 			id,
 			'activation',
 			organizationPrecondition(`"${input.expectedUpdatedAt}"`),
@@ -211,7 +214,7 @@ export class PlatformOrganizationsController {
 		@Req() request: PlatformRequest,
 	): Promise<OrganizationResponseDto> {
 		return this.mutations.lifecycle(
-			this.context(request),
+			this.context(request), request.platformPrincipal,
 			id,
 			'suspension',
 			organizationPrecondition(`"${input.expectedUpdatedAt}"`),
@@ -240,7 +243,7 @@ export class PlatformOrganizationsController {
 		@Req() request: PlatformRequest,
 	): Promise<OrganizationResponseDto> {
 		return this.mutations.lifecycle(
-			this.context(request),
+			this.context(request), request.platformPrincipal,
 			id,
 			'archival',
 			organizationPrecondition(`"${input.expectedUpdatedAt}"`),
