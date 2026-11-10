@@ -1,3 +1,4 @@
+import { normalizeEmailIdentity } from '../../../common/identity/email-identity.js';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { OrganizationOwnerInvitationStatus, Prisma, PrismaService } from '@nexcoderw/akiba-db';
 
@@ -49,6 +50,8 @@ export class PlatformOwnerOnboardingService {
 			PLATFORM_PERMISSION.organizationOwnersInvite,
 			context.actorPlatformStaffId,
 		);
+		const normalizedEmail = normalizeEmailIdentity(input.email);
+		if (normalizedEmail === null) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
 		this.audit.assertAvailable();
 		try {
 			return await this.prisma.$transaction(
@@ -65,7 +68,7 @@ export class PlatformOwnerOnboardingService {
 						data: {
 							organizationId,
 							invitedDisplayName: input.displayName,
-							invitedEmail: input.email,
+							invitedEmail: normalizedEmail,
 							invitedByPlatformStaffId: context.actorPlatformStaffId,
 							status: OrganizationOwnerInvitationStatus.PENDING_DELIVERY,
 							tokenDigest: null,
