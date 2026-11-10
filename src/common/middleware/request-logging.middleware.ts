@@ -22,8 +22,12 @@ export class RequestLoggingMiddleware implements NestMiddleware<RequestWithConte
 				}),
 			);
 		};
-		const onFinish = (): void => record('request.completed');
-		const onClose = (): void => record('request.aborted');
+		const onFinish = (): void => {
+			record('request.completed');
+		};
+		const onClose = (): void => {
+			record('request.aborted');
+		};
 		response.once('finish', onFinish);
 		response.once('close', onClose);
 		next();
