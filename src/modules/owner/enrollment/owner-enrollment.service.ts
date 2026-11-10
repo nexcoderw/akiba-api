@@ -9,7 +9,7 @@ import {
 	Prisma,
 	PrismaService,
 	UserStatus,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
 import { PlatformPasswordService } from '../../platform/auth/platform-password.service.js';
