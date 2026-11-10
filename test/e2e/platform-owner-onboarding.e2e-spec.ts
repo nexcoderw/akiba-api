@@ -7,7 +7,7 @@ import {
 	PlatformStaffStatus,
 	PrismaService,
 	UserStatus,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 import request from 'supertest';
 
 import { configureApplication } from '../../src/app-bootstrap.js';
@@ -243,9 +243,7 @@ describe('owner onboarding HTTP security (real guards, fake persistence)', () =>
 		await revoke().expect(409);
 		database.ownershipAuditCreate.mockRejectedValueOnce(new Error('private audit diagnostic'));
 		const response = await create().expect(503);
-		expect(response.body).toMatchObject({
-			error: { code: 'OWNER_INVITATION_AUDIT_UNAVAILABLE' },
-		});
+		expect(response.body).toMatchObject({ code: 'OWNER_INVITATION_AUDIT_UNAVAILABLE' });
 		expect(JSON.stringify(response.body)).not.toContain('private audit diagnostic');
 	});
 
