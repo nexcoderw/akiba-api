@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { OrganizationOwnerInvitationDeliveryStatus } from '@nexcoderw/gym-db';
+import { OrganizationOwnerInvitationDeliveryStatus } from '@nexcoderw/akiba-db';
 import { IsString, Matches, MaxLength } from 'class-validator';
 
 export class OwnerInvitationDeliveryResponseDto {
@@ -22,6 +22,6 @@ export class OwnerInvitationPreviewResponseDto {
 	@ApiProperty({ example: true, enum: [true] })
 	valid!: true;
 
-	@ApiProperty({ example: 'Soho Gym', maxLength: 160 })
+	@ApiProperty({ example: 'Kimihurura Supplies', maxLength: 160 })
 	organizationName!: string;
 }
