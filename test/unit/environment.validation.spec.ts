@@ -4,6 +4,7 @@ describe('validateEnvironment', () => {
 	it('returns safe offline test defaults', () => {
 		expect(validateEnvironment({ NODE_ENV: 'test' })).toEqual({
 			NODE_ENV: 'test',
+			API_PUBLIC_ORIGIN: 'http://localhost:3000',
 			HOST: '127.0.0.1',
 			PORT: 3000,
 			BODY_LIMIT_BYTES: 32768,
@@ -118,7 +119,7 @@ describe('validateEnvironment', () => {
 
 	it('rejects insecure production origins before loading secrets', () => {
 		expect(() =>
-			validateEnvironment({ NODE_ENV: 'production', CORS_ORIGINS: 'http://admin.akiba.com' }),
+			validateEnvironment({ NODE_ENV: 'production', API_PUBLIC_ORIGIN: 'https://api.akiba.com', CORS_ORIGINS: 'http://admin.akiba.com' }),
 		).toThrow('HTTPS');
 	});
 
@@ -133,7 +134,7 @@ describe('validateEnvironment', () => {
 
 	it('disables production Swagger by default', () => {
 		const configuration = validateEnvironment({
-			NODE_ENV: 'production',
+			NODE_ENV: 'production', API_PUBLIC_ORIGIN: 'https://api.akiba.com',
 			CORS_ORIGINS: 'https://akiba.com,https://admin.akiba.com',
 			DATABASE_URL:
 				'postgresql://neondb_owner:fictional@production.example.com/neondb?sslmode=require',
@@ -189,7 +190,7 @@ describe('validateEnvironment', () => {
 	it('rejects the development key material in production', () => {
 		expect(() =>
 			validateEnvironment({
-				NODE_ENV: 'production',
+				NODE_ENV: 'production', API_PUBLIC_ORIGIN: 'https://api.akiba.com',
 				CORS_ORIGINS: 'https://admin.akiba.com',
 				DATABASE_URL:
 					'postgresql://neondb_owner:fictional@production.example.com/neondb?sslmode=require',
