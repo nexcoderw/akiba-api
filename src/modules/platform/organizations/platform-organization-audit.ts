@@ -1,5 +1,5 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { OrganizationAuditAction, type OrganizationStatus, type Prisma } from '@nexcoderw/gym-db';
+import { OrganizationAuditAction, type OrganizationStatus, type Prisma } from '@nexcoderw/akiba-db';
 
 export interface OrganizationMutationContext {
 	readonly actorPlatformStaffId: string;
