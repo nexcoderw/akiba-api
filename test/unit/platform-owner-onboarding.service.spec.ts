@@ -53,21 +53,27 @@ describe('owner onboarding service contracts (adapter fake, not PostgreSQL)', ()
 				},
 			],
 		}).compile();
-		principal = await module.get(PlatformSessionService).authenticate(
-			'fictional-service-session-with-at-least-32-characters',
-		);
+		principal = await module
+			.get(PlatformSessionService)
+			.authenticate('fictional-service-session-with-at-least-32-characters');
 		service = module.get(PlatformOwnerOnboardingService);
 	});
 	afterEach(async () => module.close());
 
 	it('denies internal invitation reads and writes with copied or absent authority', async () => {
 		for (const identity of [undefined, { ...principal }]) {
-			await expect(service.list(identity, ORGANIZATION_ID, { limit: 20 })).rejects.toMatchObject({ status: 403 });
-			await expect(service.create(context, identity, ORGANIZATION_ID, {
-				displayName: 'Fictional Owner', email: 'owner@example.invalid',
-			})).rejects.toMatchObject({ status: 403 });
-			await expect(service.revoke(context, identity, ORGANIZATION_ID, OWNER_INVITATION_ID))
-				.rejects.toMatchObject({ status: 403 });
+			await expect(service.list(identity, ORGANIZATION_ID, { limit: 20 })).rejects.toMatchObject({
+				status: 403,
+			});
+			await expect(
+				service.create(context, identity, ORGANIZATION_ID, {
+					displayName: 'Fictional Owner',
+					email: 'owner@example.invalid',
+				}),
+			).rejects.toMatchObject({ status: 403 });
+			await expect(
+				service.revoke(context, identity, ORGANIZATION_ID, OWNER_INVITATION_ID),
+			).rejects.toMatchObject({ status: 403 });
 		}
 		expect(database.runTransaction).not.toHaveBeenCalled();
 	});
