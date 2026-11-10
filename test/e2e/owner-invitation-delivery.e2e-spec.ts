@@ -8,7 +8,7 @@ import {
 	PlatformStaffStatus,
 	PrismaService,
 	UserStatus,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 import request from 'supertest';
 
 import { configureApplication } from '../../src/app-bootstrap.js';
@@ -198,14 +198,14 @@ describe('owner invitation delivery HTTP (real guards, DTOs, services; fake adap
 			if (condition === 'archived')
 				database.state.invitation.organization.status = OrganizationStatus.ARCHIVED;
 			const response = await preview(token).expect(401).expect('Cache-Control', 'no-store');
-			expect(response.body).toMatchObject({ error: { code: 'OWNER_INVITATION_INVALID' } });
+			expect(response.body).toMatchObject({ code: 'OWNER_INVITATION_INVALID' });
 			expect(response.headers['set-cookie']).toBeUndefined();
 			expect(JSON.stringify(response.body)).not.toContain('aline@example.com');
 			expect(database.invitationUpdate).not.toHaveBeenCalled();
 		},
 	);
 
-	it('previews only the gym name with no-store and no cookies or identity activation', async () => {
+	it('previews only the organization name with no-store and no cookies or identity activation', async () => {
 		const token = tokens.generate();
 		Object.assign(database.state.invitation, {
 			status: InvitationStatus.SENT,
@@ -213,7 +213,7 @@ describe('owner invitation delivery HTTP (real guards, DTOs, services; fake adap
 			expiresAt: new Date(database.state.now.getTime() + 60_000),
 		});
 		const response = await preview(token).expect(200).expect('Cache-Control', 'no-store');
-		expect(response.body).toEqual({ valid: true, organizationName: 'Soho Gym' });
+		expect(response.body).toEqual({ valid: true, organizationName: 'Kimihurura Supplies' });
 		expect(response.headers['set-cookie']).toBeUndefined();
 		expect(database.userCreate).not.toHaveBeenCalled();
 		expect(database.membershipRoleCreate).not.toHaveBeenCalled();
