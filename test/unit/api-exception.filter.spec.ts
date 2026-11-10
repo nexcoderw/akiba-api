@@ -47,9 +47,12 @@ describe('global Problem Details filter', () => {
 		const response = capture(new HttpException('SQL private-password /private/host', status));
 		expect(response.status).toHaveBeenCalledWith(status);
 		expect(response.type).toHaveBeenCalledWith('application/problem+json');
-		expect(response.json).toHaveBeenCalledWith(
-			expect.objectContaining({ status, code, requestId: expect.stringMatching(/^req_/u) }),
-		);
+		expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ status, code }));
+		const body: unknown = response.json.mock.calls[0]?.[0];
+		if (typeof body !== 'object' || body === null || !('requestId' in body)) {
+			throw new Error('Expected a correlated problem response.');
+		}
+		expect(body.requestId).toEqual(expect.stringMatching(/^req_[0-9a-f-]{36}$/u));
 		expect(JSON.stringify(response.json.mock.calls)).not.toMatch(
 			/SQL|private-password|private\/host|secret-value/u,
 		);
