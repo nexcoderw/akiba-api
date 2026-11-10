@@ -29,7 +29,7 @@ describe('safe validation issues', () => {
 
 	it('bounds output and replaces attacker-selected unknown properties', () => {
 		const errors: ValidationError[] = Array.from({ length: 100 }, (_, index) => ({
-			property: `field${index}`,
+			property: `field${String(index)}`,
 			constraints: { isString: secret },
 		}));
 		expect(createValidationException(errors).fieldErrors).toHaveLength(20);
@@ -40,12 +40,12 @@ describe('safe validation issues', () => {
 		).toEqual([{ field: '$', code: 'UNEXPECTED_FIELD', message: 'Remove unexpected fields.' }]);
 	});
 
-	it('handles cyclic nesting and missing properties without recursion failures', () => {
+	it('handles cyclic nesting and empty properties without recursion failures', () => {
 		const cycle: ValidationError = { property: 'profile', children: [] };
 		cycle.children = [cycle];
 		expect(createValidationException([cycle]).getStatus()).toBe(400);
 		expect(
-			createValidationException([{ constraints: { unknownValue: secret } } as ValidationError])
+			createValidationException([{ property: '', constraints: { unknownValue: secret } }])
 				.fieldErrors[0],
 		).toMatchObject({ field: '$', code: 'INVALID_OBJECT' });
 	});
