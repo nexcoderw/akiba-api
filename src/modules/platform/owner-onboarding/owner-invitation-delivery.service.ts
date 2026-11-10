@@ -5,7 +5,7 @@ import {
 	OrganizationOwnerInvitationDeliveryStatus as DeliveryStatus,
 	OrganizationOwnerInvitationStatus as InvitationStatus,
 	PrismaService,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 
 import { organizationPortalOriginForSlug } from '../../../config/organization-portal-origin.js';
 import type {
