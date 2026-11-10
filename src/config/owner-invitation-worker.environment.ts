@@ -1,4 +1,4 @@
-import { loadDatabaseConfig } from '@nexcoderw/gym-db';
+import { loadDatabaseConfig } from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from './environment.types.js';
 import { parseOrganizationPortalOriginPolicy } from './organization-portal-origin.js';
@@ -35,7 +35,7 @@ export function validateOwnerInvitationWorkerEnvironment(
 	});
 	const url = new URL(database.databaseUrl);
 	if (
-		['neondb_owner', 'postgres', 'gym_migrator'].includes(decodeURIComponent(url.username)) ||
+		['neondb_owner', 'postgres', 'akiba_migrator'].includes(decodeURIComponent(url.username)) ||
 		database.poolMax > 16 ||
 		database.connectionTimeoutMilliseconds < 1000 ||
 		database.connectionTimeoutMilliseconds > 60_000
