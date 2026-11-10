@@ -19,6 +19,6 @@ explicit and be covered by authorization tests.
 
 ## Example and checklist
 
-`src/modules/owner/membership-plans/dto/create-membership-plan.dto.ts` belongs to the owner membership
-plan feature. Confirm each file has one owner, dependencies point inward, platform-only authorization
+`src/modules/owner/portal/dto/owner-dashboard-response.dto.ts` belongs to the owner portal
+identity feature. Confirm each file has one owner, dependencies point inward, platform-only authorization
 cannot be reached from owner routes, and no circular import is introduced.
