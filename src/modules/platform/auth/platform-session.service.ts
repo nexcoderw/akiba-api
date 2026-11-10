@@ -108,19 +108,23 @@ export class PlatformSessionService {
 	): Promise<void> {
 		const digest = principal === undefined ? undefined : this.issued.get(principal);
 		if (
-			principal === undefined || digest === undefined ||
+			principal === undefined ||
+			digest === undefined ||
 			!Object.values(PLATFORM_PERMISSION).some((value) => value === permission) ||
 			(actorPlatformStaffId !== undefined && actorPlatformStaffId !== principal.platformStaffId)
-		) throw new ForbiddenException({ code: 'ACCESS_DENIED', message: 'Access is denied.' });
+		)
+			throw new ForbiddenException({ code: 'ACCESS_DENIED', message: 'Access is denied.' });
 		const current = await this.authenticateTransaction(digest, new Date(), {
 			maxWait: this.transactionMaxWaitMilliseconds,
 			timeout: TRANSACTION_TIMEOUT_MS,
 		});
 		if (
-			current.sessionId !== principal.sessionId || current.userId !== principal.userId ||
+			current.sessionId !== principal.sessionId ||
+			current.userId !== principal.userId ||
 			current.platformStaffId !== principal.platformStaffId ||
 			!current.permissions.includes(permission)
-		) throw new ForbiddenException({ code: 'ACCESS_DENIED', message: 'Access is denied.' });
+		)
+			throw new ForbiddenException({ code: 'ACCESS_DENIED', message: 'Access is denied.' });
 	}
 
 	private async authenticateTransaction(
