@@ -36,6 +36,9 @@ import {
 } from '../fixtures/platform-owner-onboarding-database.fixture.js';
 import { ORGANIZATION_ID } from '../fixtures/platform-organizations-database.fixture.js';
 
+import { PlatformSessionService } from '../../src/modules/platform/auth/platform-session.service.js';
+import { PlatformServiceAuthModule } from '../fixtures/platform-service-auth.module.js';
+
 const context = {
 	actorPlatformStaffId: OWNER_INVITATION_ACTOR_ID,
 	requestId: 'fictional-delivery-request',
@@ -48,6 +51,7 @@ async function setup(input = invitationDeliveryInput()) {
 		.fn<ResendOwnerInvitationEmailService['send']>()
 		.mockResolvedValue({ kind: 'accepted', messageId: '77777777-7777-4777-8777-777777777777' });
 	const module = await Test.createTestingModule({
+		imports: [PlatformServiceAuthModule],
 		providers: [
 			OwnerInvitationDeliveryGate,
 			OwnerInvitationDeliveryService,
@@ -60,7 +64,11 @@ async function setup(input = invitationDeliveryInput()) {
 			{ provide: ResendOwnerInvitationEmailService, useValue: { send } },
 		],
 	}).compile();
+	const principal = await module.get(PlatformSessionService).authenticate(
+		'fictional-service-session-with-at-least-32-characters',
+	);
 	return {
+		principal,
 		...database,
 		config,
 		send,
@@ -71,12 +79,26 @@ async function setup(input = invitationDeliveryInput()) {
 }
 
 describe('audited invitation delivery and worker policy', () => {
+	it('denies direct delivery reservations without a server-issued platform identity', async () => {
+		const fixture = await setup();
+		try {
+			for (const identity of [undefined, { ...fixture.principal }]) {
+				await expect(fixture.service.queue(context, identity, ORGANIZATION_ID, OWNER_INVITATION_ID))
+					.rejects.toMatchObject({ status: 403 });
+			}
+			expect(fixture.deliveryCreate).not.toHaveBeenCalled();
+			expect(fixture.state.delivery).toBeNull();
+		} finally {
+			await fixture.module.close();
+		}
+	});
+
 	it('creates one encrypted reservation and one audit; duplicates mint no new token', async () => {
 		const fixture = await setup();
 		try {
-			const first = await fixture.service.queue(context, ORGANIZATION_ID, OWNER_INVITATION_ID);
+			const first = await fixture.service.queue(context, fixture.principal, ORGANIZATION_ID, OWNER_INVITATION_ID);
 			const digest = fixture.state.delivery?.tokenDigest;
-			expect(await fixture.service.queue(context, ORGANIZATION_ID, OWNER_INVITATION_ID)).toEqual(
+			expect(await fixture.service.queue(context, fixture.principal, ORGANIZATION_ID, OWNER_INVITATION_ID)).toEqual(
 				first,
 			);
 			expect(fixture.deliveryCreate).toHaveBeenCalledTimes(1);
@@ -106,15 +128,15 @@ describe('audited invitation delivery and worker policy', () => {
 		try {
 			fixture.ownershipAuditCreate.mockRejectedValueOnce(new Error('private database error'));
 			await expect(
-				fixture.service.queue(context, ORGANIZATION_ID, OWNER_INVITATION_ID),
+				fixture.service.queue(context, fixture.principal, ORGANIZATION_ID, OWNER_INVITATION_ID),
 			).rejects.toBeInstanceOf(ServiceUnavailableException);
 			expect(fixture.state.delivery).toBeNull();
 			fixture.state.ready = false;
 			await expect(
-				fixture.service.queue(context, ORGANIZATION_ID, OWNER_INVITATION_ID),
+				fixture.service.queue(context, fixture.principal, ORGANIZATION_ID, OWNER_INVITATION_ID),
 			).rejects.toBeInstanceOf(ServiceUnavailableException);
 			await expect(
-				disabled.service.queue(context, ORGANIZATION_ID, OWNER_INVITATION_ID),
+				disabled.service.queue(context, disabled.principal, ORGANIZATION_ID, OWNER_INVITATION_ID),
 			).rejects.toBeInstanceOf(ServiceUnavailableException);
 			expect(fixture.deliveryCreate).toHaveBeenCalledTimes(1);
 			expect(disabled.deliveryCreate).not.toHaveBeenCalled();
@@ -127,7 +149,7 @@ describe('audited invitation delivery and worker policy', () => {
 	it('atomically confirms provider acceptance and erases the envelope without activating identities', async () => {
 		const fixture = await setup();
 		try {
-			await fixture.service.queue(context, ORGANIZATION_ID, OWNER_INVITATION_ID);
+			await fixture.service.queue(context, fixture.principal, ORGANIZATION_ID, OWNER_INVITATION_ID);
 			const digest = fixture.state.delivery?.tokenDigest;
 			await fixture.worker.runOnce('fictional-worker');
 			expect(fixture.send).toHaveBeenCalledTimes(1);
@@ -156,7 +178,7 @@ describe('audited invitation delivery and worker policy', () => {
 		const fixture = await setup();
 		try {
 			fixture.send.mockResolvedValue(outcome);
-			await fixture.service.queue(context, ORGANIZATION_ID, OWNER_INVITATION_ID);
+			await fixture.service.queue(context, fixture.principal, ORGANIZATION_ID, OWNER_INVITATION_ID);
 			await fixture.worker.runOnce('fictional-worker');
 			expect(fixture.state.invitation.status).toBe(InvitationStatus.PENDING_DELIVERY);
 			expect(fixture.state.delivery?.status).toBe(
@@ -177,7 +199,7 @@ describe('audited invitation delivery and worker policy', () => {
 	it('recovers an abandoned lease as uncertain and later erases it without resending', async () => {
 		const fixture = await setup();
 		try {
-			await fixture.service.queue(context, ORGANIZATION_ID, OWNER_INVITATION_ID);
+			await fixture.service.queue(context, fixture.principal, ORGANIZATION_ID, OWNER_INVITATION_ID);
 			const row = fixture.state.delivery;
 			if (row === null) throw new Error('Missing reservation.');
 			Object.assign(row, {
@@ -203,7 +225,7 @@ describe('audited invitation delivery and worker policy', () => {
 	it('does not take over another worker’s live lease or submit another email', async () => {
 		const fixture = await setup();
 		try {
-			await fixture.service.queue(context, ORGANIZATION_ID, OWNER_INVITATION_ID);
+			await fixture.service.queue(context, fixture.principal, ORGANIZATION_ID, OWNER_INVITATION_ID);
 			const row = fixture.state.delivery;
 			if (row === null) throw new Error('Missing reservation.');
 			Object.assign(row, {
@@ -229,7 +251,7 @@ describe('audited invitation delivery and worker policy', () => {
 	it('records uncertainty after a finalization rollback rather than resubmitting an accepted email', async () => {
 		const fixture = await setup();
 		try {
-			await fixture.service.queue(context, ORGANIZATION_ID, OWNER_INVITATION_ID);
+			await fixture.service.queue(context, fixture.principal, ORGANIZATION_ID, OWNER_INVITATION_ID);
 			fixture.invitationUpdate.mockResolvedValueOnce({ count: 0 });
 			await fixture.worker.runOnce('fictional-worker');
 			expect(fixture.state.delivery).toMatchObject({
@@ -252,7 +274,7 @@ describe('audited invitation delivery and worker policy', () => {
 				code: 'PROVIDER_RATE_LIMITED',
 				retryable: true,
 			});
-			await fixture.service.queue(context, ORGANIZATION_ID, OWNER_INVITATION_ID);
+			await fixture.service.queue(context, fixture.principal, ORGANIZATION_ID, OWNER_INVITATION_ID);
 			await fixture.worker.runOnce('fictional-worker');
 			const retryAt = fixture.state.delivery?.nextAttemptAt;
 			if (retryAt === null || retryAt === undefined) throw new Error('Missing retry.');
@@ -272,7 +294,7 @@ describe('audited invitation delivery and worker policy', () => {
 	it('does not confirm provider acceptance after the worker lease has expired', async () => {
 		const fixture = await setup();
 		try {
-			await fixture.service.queue(context, ORGANIZATION_ID, OWNER_INVITATION_ID);
+			await fixture.service.queue(context, fixture.principal, ORGANIZATION_ID, OWNER_INVITATION_ID);
 			fixture.send.mockImplementation(() => {
 				fixture.state.now = new Date(fixture.state.now.getTime() + 120_000);
 				return Promise.resolve({
@@ -299,7 +321,7 @@ describe('audited invitation delivery and worker policy', () => {
 				code: 'PROVIDER_RATE_LIMITED',
 				retryable: true,
 			});
-			await fixture.service.queue(context, ORGANIZATION_ID, OWNER_INVITATION_ID);
+			await fixture.service.queue(context, fixture.principal, ORGANIZATION_ID, OWNER_INVITATION_ID);
 			await fixture.worker.runOnce('fictional-worker');
 			expect(fixture.state.delivery).toMatchObject({
 				status: DeliveryStatus.FAILED,
@@ -322,7 +344,7 @@ describe('audited invitation delivery and worker policy', () => {
 	])('does not resurrect an invitation: %s', async (condition) => {
 		const fixture = await setup();
 		try {
-			await fixture.service.queue(context, ORGANIZATION_ID, OWNER_INVITATION_ID);
+			await fixture.service.queue(context, fixture.principal, ORGANIZATION_ID, OWNER_INVITATION_ID);
 			if (condition === 'revoked-before')
 				fixture.state.invitation.status = InvitationStatus.REVOKED;
 			if (condition === 'suspended-actor')
