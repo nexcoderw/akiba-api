@@ -34,15 +34,15 @@ export class OwnerTokenService {
 	}
 
 	sessionDigest(token: string): string {
-		return this.digest(this.sessionPepper, 'gym-owner-session-v1', token);
+		return this.digest(this.sessionPepper, 'organization-owner-session-v1', token);
 	}
 
 	enrollmentDigest(token: string): string {
-		return this.digest(this.enrollmentPepper, 'gym-owner-enrollment-v1', token);
+		return this.digest(this.enrollmentPepper, 'organization-owner-enrollment-v1', token);
 	}
 
 	rateLimitDigest(value: string): string {
-		return this.digest(this.sessionPepper, 'gym-owner-rate-limit-v1', value);
+		return this.digest(this.sessionPepper, 'organization-owner-rate-limit-v1', value);
 	}
 
 	equal(left: string, right: string): boolean {
