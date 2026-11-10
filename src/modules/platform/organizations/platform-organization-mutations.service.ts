@@ -21,17 +21,25 @@ import {
 import { ORGANIZATION_SELECT, organizationResponse } from './platform-organization-mapping.js';
 import { ORGANIZATION_TRANSACTION_OPTIONS } from './platform-organizations.constants.js';
 
+import { PlatformSessionService } from '../auth/platform-session.service.js';
+import type { PlatformPrincipal } from '../auth/platform-auth.types.js';
+import { PLATFORM_PERMISSION } from '../auth/platform-permission.constants.js';
+
 @Injectable()
 export class PlatformOrganizationMutationsService {
 	constructor(
 		private readonly prisma: PrismaService,
+		private readonly sessions: PlatformSessionService,
 		private readonly audit: PlatformOrganizationAudit,
 	) {}
 
 	async create(
 		context: OrganizationMutationContext,
+		principal: PlatformPrincipal | undefined,
 		input: CreateOrganizationDto,
 	): Promise<OrganizationResponseDto> {
+		context = Object.freeze({ ...context });
+		await this.sessions.authorize(principal, PLATFORM_PERMISSION.organizationsCreate, context.actorPlatformStaffId);
 		this.audit.assertAvailable();
 		try {
 			return await this.prisma.$transaction(async (transaction) => {
@@ -59,28 +67,40 @@ export class PlatformOrganizationMutationsService {
 
 	update(
 		context: OrganizationMutationContext,
+		principal: PlatformPrincipal | undefined,
 		id: string,
 		input: UpdateOrganizationDto,
 		expected: Date,
 	): Promise<OrganizationResponseDto> {
-		return this.change(context, id, expected, { name: input.name });
+		return this.change(context, principal, id, expected, { name: input.name });
 	}
 
 	lifecycle(
 		context: OrganizationMutationContext,
+		principal: PlatformPrincipal | undefined,
 		id: string,
 		action: OrganizationLifecycleAction,
 		expected: Date,
 	): Promise<OrganizationResponseDto> {
-		return this.change(context, id, expected, { action });
+		return this.change(context, principal, id, expected, { action });
 	}
 
 	private async change(
 		context: OrganizationMutationContext,
+		principal: PlatformPrincipal | undefined,
 		id: string,
 		expected: Date,
 		command: { readonly name: string } | { readonly action: OrganizationLifecycleAction },
 	): Promise<OrganizationResponseDto> {
+		context = Object.freeze({ ...context });
+		const permission = 'name' in command
+			? PLATFORM_PERMISSION.organizationsUpdate
+			: {
+				activation: PLATFORM_PERMISSION.organizationsActivate,
+				suspension: PLATFORM_PERMISSION.organizationsSuspend,
+				archival: PLATFORM_PERMISSION.organizationsArchive,
+			}[command.action];
+		await this.sessions.authorize(principal, permission, context.actorPlatformStaffId);
 		this.audit.assertAvailable();
 		try {
 			return await this.prisma.$transaction(
