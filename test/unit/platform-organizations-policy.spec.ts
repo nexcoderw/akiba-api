@@ -1,6 +1,6 @@
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { OrganizationStatus } from '@nexcoderw/gym-db';
+import { OrganizationStatus } from '@nexcoderw/akiba-db';
 
 import { CreateOrganizationDto } from '../../src/modules/platform/organizations/dto/create-organization.dto.js';
 import { UpdateOrganizationDto } from '../../src/modules/platform/organizations/dto/update-organization.dto.js';
@@ -15,11 +15,11 @@ import { organizationFixture } from '../fixtures/platform-organizations-database
 describe('platform organization policies and transport DTOs', () => {
 	it('normalizes only name edges and preserves explicit safe response fields', async () => {
 		const input = plainToInstance(CreateOrganizationDto, {
-			name: '  Soho Gym\u0085 ',
-			slug: 'soho',
+			name: '  Kimihurura Supplies\u0085 ',
+			slug: 'kimihurura',
 		});
 		expect(await validate(input)).toEqual([]);
-		expect(input.name).toBe('Soho Gym');
+		expect(input.name).toBe('Kimihurura Supplies');
 		const row = organizationFixture();
 		const result = organizationResponse({ ...row, ...{ secret: 'not a response field' } });
 		expect(Object.keys(result).sort()).toEqual(
@@ -39,11 +39,11 @@ describe('platform organization policies and transport DTOs', () => {
 		expect(result.activatedAt).toBeNull();
 	});
 
-	it.each(['', ' ', '\u0085', 'Soho\u0000Gym', 'x'.repeat(161)])(
+	it.each(['', ' ', '\u0085', 'Kimihurura Supplies\u0000organization', 'x'.repeat(161)])(
 		'rejects invalid names: %#',
 		async (name) => {
 			expect(
-				await validate(plainToInstance(CreateOrganizationDto, { name, slug: 'soho' })),
+				await validate(plainToInstance(CreateOrganizationDto, { name, slug: 'kimihurura' })),
 			).not.toEqual([]);
 		},
 	);
@@ -60,14 +60,14 @@ describe('platform organization policies and transport DTOs', () => {
 		...ORGANIZATION_RESERVED_SLUGS,
 	])('rejects invalid or reserved slug: %s', async (slug) => {
 		expect(
-			await validate(plainToInstance(CreateOrganizationDto, { name: 'Soho Gym', slug })),
+			await validate(plainToInstance(CreateOrganizationDto, { name: 'Kimihurura Supplies', slug })),
 		).not.toEqual([]);
 	});
 	it.each(['status', 'slug', 'id', 'activatedAt', 'ownerId', 'metadata'])(
 		'rejects profile mass assignment: %s',
 		async (field) => {
 			const input = plainToInstance(UpdateOrganizationDto, {
-				name: 'Power Gym',
+				name: 'Remera Trading',
 				[field]: 'untrusted',
 			});
 			expect(await validate(input, { whitelist: true, forbidNonWhitelisted: true })).not.toEqual(
@@ -79,8 +79,8 @@ describe('platform organization policies and transport DTOs', () => {
 		'rejects creation ownership or activation fields: %s',
 		async (field) => {
 			const input = plainToInstance(CreateOrganizationDto, {
-				name: 'Soho Gym',
-				slug: 'soho',
+				name: 'Kimihurura Supplies',
+				slug: 'kimihurura',
 				[field]: 'untrusted',
 			});
 			expect(await validate(input, { whitelist: true, forbidNonWhitelisted: true })).not.toEqual(
