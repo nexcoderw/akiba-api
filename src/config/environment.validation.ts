@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import {
 	NODE_ENVIRONMENTS,
 	type EnvironmentVariables,
@@ -11,7 +12,7 @@ const DEFAULT_RATE_LIMIT_TTL_MS = 60_000;
 const DEFAULT_RATE_LIMIT_LIMIT = 100;
 const DEFAULT_LOCAL_ORIGIN = 'http://localhost:4000';
 const DEFAULT_MANAGER_ORIGIN = 'http://localhost:4001';
-const DEFAULT_DATABASE_URL = 'postgresql://gym_app:local-only@localhost:5432/nexcode_gym';
+const OFFLINE_DATABASE_URL = 'postgresql://offline:offline@127.0.0.1:1/akiba_offline';
 const DEFAULT_LOCAL_KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 const DEFAULT_DUMMY_PASSWORD_HASH =
 	'$argon2id$v=19$m=65536,t=3,p=1$c3ludGhldGljLXNhbHQ$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
@@ -97,6 +98,9 @@ function parseOrigins(value: unknown, environment: NodeEnvironment): string[] {
 		}
 		if (url.origin !== candidate || !['http:', 'https:'].includes(url.protocol)) {
 			throw new Error('CORS_ORIGINS must contain HTTP origins without paths.');
+		}
+		if (environment === 'production' && url.protocol !== 'https:') {
+			throw new Error('CORS_ORIGINS must use HTTPS in production.');
 		}
 		return url.origin;
 	});
@@ -185,6 +189,34 @@ function parseBootstrapTarget(
 	return { expectedHost, expectedName };
 }
 
+function parseTrustedProxies(value: unknown): string[] {
+	if (value === undefined || value === '') return [];
+	if (typeof value !== 'string')
+		throw new Error('TRUST_PROXY_CIDRS must be an explicit IP/CIDR list.');
+	const entries = value.split(',').map((entry) => entry.trim());
+	if (
+		entries.length > 16 ||
+		entries.some((entry) => {
+			const parts = entry.split('/');
+			const address = parts[0] ?? '';
+			const version = isIP(address);
+			const prefix = parts[1];
+			return (
+				version === 0 ||
+				parts.length > 2 ||
+				(prefix !== undefined &&
+					(!/^[0-9]{1,3}$/u.test(prefix) ||
+						Number(prefix) < 1 ||
+						Number(prefix) > (version === 4 ? 32 : 128)))
+			);
+		})
+	)
+		throw new Error(
+			'TRUST_PROXY_CIDRS must contain bounded IP/CIDR ranges, never trust-all settings.',
+		);
+	return entries;
+}
+
 /** Validates and normalizes environment variables before Nest creates application providers. */
 export function validateEnvironment(input: Record<string, unknown>): EnvironmentVariables {
 	const nodeEnvironment = parseNodeEnvironment(input.NODE_ENV);
@@ -251,8 +283,32 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
 	const databaseUrl = requireString(
 		input.DATABASE_URL,
 		'DATABASE_URL',
-		nodeEnvironment === 'production' ? undefined : DEFAULT_DATABASE_URL,
+		nodeEnvironment === 'test' ? OFFLINE_DATABASE_URL : undefined,
 	);
+	let parsedDatabaseUrl: URL;
+	try {
+		parsedDatabaseUrl = new URL(databaseUrl);
+	} catch {
+		throw new Error('DATABASE_URL must be a valid PostgreSQL URL.');
+	}
+	if (!['postgres:', 'postgresql:'].includes(parsedDatabaseUrl.protocol))
+		throw new Error('DATABASE_URL must use PostgreSQL.');
+	if (
+		nodeEnvironment === 'production' &&
+		!['require', 'verify-ca', 'verify-full'].includes(
+			parsedDatabaseUrl.searchParams.get('sslmode') ?? '',
+		)
+	)
+		throw new Error('DATABASE_URL must require TLS in production.');
+	const swaggerEnabled = parseBoolean(
+		input.SWAGGER_ENABLED,
+		'SWAGGER_ENABLED',
+		nodeEnvironment !== 'production',
+	);
+	if (nodeEnvironment === 'production' && swaggerEnabled)
+		throw new Error(
+			'SWAGGER_ENABLED must be false in production until documentation authentication is implemented.',
+		);
 	const bootstrapEnabled = parseBoolean(
 		input.PLATFORM_OWNER_BOOTSTRAP_ENABLED,
 		'PLATFORM_OWNER_BOOTSTRAP_ENABLED',
@@ -278,13 +334,13 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
 		: null;
 	if (
 		bootstrapRole !== null &&
-		(!/^gym_bootstrap(?:_[a-z0-9_]+)?$/u.test(bootstrapRole) || bootstrapRole.length > 63)
+		(!/^akiba_bootstrap(?:_[a-z0-9_]+)?$/u.test(bootstrapRole) || bootstrapRole.length > 63)
 	) {
 		throw new Error('Bootstrap requires a dedicated restricted database role.');
 	}
 	if (
 		bootstrapMarker !== null &&
-		!/^nexcode-gym:(?:bootstrap|disposable-bootstrap-test):[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
+		!/^akiba:(?:bootstrap|disposable-bootstrap-test):[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
 			bootstrapMarker,
 		)
 	) {
@@ -425,12 +481,16 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
 		NODE_ENV: nodeEnvironment,
 		HOST: typeof host === 'string' ? host : '127.0.0.1',
 		PORT: parseInteger(input.PORT, 'PORT', DEFAULT_PORT, 1, 65_535),
-		CORS_ORIGINS: corsOrigins,
-		SWAGGER_ENABLED: parseBoolean(
-			input.SWAGGER_ENABLED,
-			'SWAGGER_ENABLED',
-			nodeEnvironment !== 'production',
+		BODY_LIMIT_BYTES: parseInteger(
+			input.BODY_LIMIT_BYTES,
+			'BODY_LIMIT_BYTES',
+			32_768,
+			1024,
+			1_048_576,
 		),
+		TRUST_PROXY_CIDRS: parseTrustedProxies(input.TRUST_PROXY_CIDRS),
+		CORS_ORIGINS: corsOrigins,
+		SWAGGER_ENABLED: swaggerEnabled,
 		RATE_LIMIT_TTL_MS: parseInteger(
 			input.RATE_LIMIT_TTL_MS,
 			'RATE_LIMIT_TTL_MS',
