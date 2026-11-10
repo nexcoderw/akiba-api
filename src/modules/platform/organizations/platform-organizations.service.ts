@@ -8,12 +8,20 @@ import { organizationFailure, organizationNotFound } from './platform-organizati
 import { ORGANIZATION_SELECT, organizationResponse } from './platform-organization-mapping.js';
 import { ORGANIZATION_TRANSACTION_OPTIONS } from './platform-organizations.constants.js';
 
+import { PlatformSessionService } from '../auth/platform-session.service.js';
+import type { PlatformPrincipal } from '../auth/platform-auth.types.js';
+import { PLATFORM_PERMISSION } from '../auth/platform-permission.constants.js';
+
 @Injectable()
 export class PlatformOrganizationsService {
-	constructor(private readonly prisma: PrismaService) {}
+	constructor(
+		private readonly prisma: PrismaService,
+		private readonly sessions: PlatformSessionService,
+	) {}
 
 	/** Platform control-plane lookup only; the feature module does not export this service. */
-	async get(id: string): Promise<OrganizationResponseDto> {
+	async get(principal: PlatformPrincipal | undefined, id: string): Promise<OrganizationResponseDto> {
+		await this.sessions.authorize(principal, PLATFORM_PERMISSION.organizationsRead);
 		try {
 			const row = await this.prisma.organization.findUnique({
 				where: { id },
@@ -26,7 +34,8 @@ export class PlatformOrganizationsService {
 		}
 	}
 
-	async list(query: ListOrganizationsQueryDto): Promise<OrganizationListResponseDto> {
+	async list(principal: PlatformPrincipal | undefined, query: ListOrganizationsQueryDto): Promise<OrganizationListResponseDto> {
+		await this.sessions.authorize(principal, PLATFORM_PERMISSION.organizationsRead);
 		if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 50) {
 			throw new BadRequestException({
 				code: 'ORGANIZATION_PAGE_INVALID',
