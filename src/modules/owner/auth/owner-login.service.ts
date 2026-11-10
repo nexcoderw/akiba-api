@@ -1,3 +1,5 @@
+import { normalizeEmailIdentity } from '../../../common/identity/email-identity.js';
+import { accountCanAuthenticate } from '../../../common/identity/account-state.policy.js';
 import {
 	Injectable,
 	Logger,
@@ -8,7 +10,6 @@ import {
 	OrganizationMembershipStatus,
 	OwnerSessionAssurance,
 	PrismaService,
-	UserStatus,
 } from '@nexcoderw/akiba-db';
 
 import type { OwnerAuthenticatedResponseDto } from './dto/owner-auth-response.dto.js';
@@ -40,34 +41,41 @@ export class OwnerLoginService {
 		now = new Date(),
 		organizationSlug?: string,
 	): Promise<OwnerLoginSuccess> {
-		this.attempts.assertAllowed(ipAddress, input.email, now.getTime());
+		const email = normalizeEmailIdentity(input.email);
+		if (email === null) throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidCredentials);
+		this.attempts.assertAllowed(ipAddress, email, now.getTime());
 		let identity: Awaited<ReturnType<typeof this.readIdentity>>;
 		try {
-			identity = await this.readIdentity(input.email, organizationSlug);
+			identity = await this.readIdentity(email, organizationSlug);
 		} catch (error: unknown) {
 			throw this.persistenceFailure(error);
 		}
 		const passwordHash = identity?.passwordCredential?.passwordHash ?? this.passwords.dummyHash;
-		const passwordValid = await this.passwords.verify(passwordHash, input.password);
+		const passwordValid = await this.passwords.verify(
+			passwordHash,
+			input.password,
+			identity?.passwordCredential?.normalization ?? 'raw',
+		);
 		const hasOwnerMembership =
 			identity?.organizationMemberships.some((membership) =>
 				membership.roles.some(({ organizationRole }) => organizationRole.key === 'owner'),
 			) ?? false;
 		if (
 			!passwordValid ||
-			identity?.status !== UserStatus.ACTIVE ||
-			identity.emailVerifiedAt === null ||
+			identity === null ||
+			!accountCanAuthenticate(identity.status, identity.emailVerifiedAt) ||
+			identity.passwordCredential?.disabledAt !== null ||
 			identity.platformStaff !== null ||
 			!hasOwnerMembership
 		) {
-			this.attempts.recordFailure(ipAddress, input.email, now.getTime());
+			this.attempts.recordFailure(ipAddress, email, now.getTime());
 			this.logger.warn(JSON.stringify({ event: 'owner_login_rejected' }));
 			throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidCredentials);
 		}
 
 		try {
 			const session = await this.sessions.create(identity.id, OwnerSessionAssurance.AAL1, now);
-			this.attempts.clearAccount(input.email);
+			this.attempts.clearAccount(email);
 			this.logger.log(JSON.stringify({ event: 'owner_session_created', userId: identity.id }));
 			return {
 				status: 'authenticated',
@@ -77,6 +85,8 @@ export class OwnerLoginService {
 				csrfToken: '',
 			};
 		} catch (error: unknown) {
+			if (error instanceof UnauthorizedException)
+				throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidCredentials);
 			throw this.persistenceFailure(error);
 		}
 	}
@@ -88,7 +98,9 @@ export class OwnerLoginService {
 				id: true,
 				status: true,
 				emailVerifiedAt: true,
-				passwordCredential: { select: { passwordHash: true } },
+				passwordCredential: {
+					select: { passwordHash: true, normalization: true, disabledAt: true },
+				},
 				platformStaff: { select: { id: true } },
 				organizationMemberships: {
 					where: {
