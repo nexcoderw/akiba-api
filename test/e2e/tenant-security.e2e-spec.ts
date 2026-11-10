@@ -13,13 +13,18 @@ import request from 'supertest';
 
 import { configureApplication } from '../../src/app-bootstrap.js';
 import { AppModule } from '../../src/app.module.js';
-import { AccessBoundary } from '../../src/common/security/route-access.decorator.js';
+import {
+	AccessBoundary,
+	RequireOrganizationPermission,
+	TenantIdentityRead,
+} from '../../src/common/security/route-access.decorator.js';
 import { validateEnvironment } from '../../src/config/environment.validation.js';
 import { DatabaseIntegrationModule } from '../../src/infrastructure/database/database-integration.module.js';
 import { sealOwnerSession } from '../../src/modules/owner/auth/owner-session-cookie.js';
 import { OwnerAuthModule } from '../../src/modules/owner/auth/owner-auth.module.js';
 import { OwnerOriginCsrfGuard } from '../../src/modules/owner/auth/owner-origin-csrf.guard.js';
 import { OrganizationTenantGuard } from '../../src/modules/owner/tenant/organization-tenant.guard.js';
+import { ORGANIZATION_PERMISSION } from '../../src/modules/owner/tenant/organization-permission.constants.js';
 import { TenantSecurityModule } from '../../src/modules/owner/tenant/tenant-security.module.js';
 import { OwnerTokenService } from '../../src/modules/owner/auth/owner-token.service.js';
 import { TenantAuthorizationService } from '../../src/modules/owner/tenant/tenant-authorization.service.js';
@@ -57,6 +62,17 @@ class SecurityProbeController {
 @UseGuards(OwnerOriginCsrfGuard, OrganizationTenantGuard)
 @Controller('tenant-mutation-probe')
 class TenantMutationProbeController {
+	@Get('permission-read')
+	@RequireOrganizationPermission(ORGANIZATION_PERMISSION.membersRead)
+	permissionRead(): { authorized: boolean } {
+		return { authorized: true };
+	}
+	@Get('conflicting-read')
+	@TenantIdentityRead()
+	@RequireOrganizationPermission(ORGANIZATION_PERMISSION.membersRead)
+	conflictingRead(): never {
+		throw new Error('Conflicting tenant metadata was accepted.');
+	}
 	@Get('future-read')
 	futureRead(): never {
 		throw new Error('Read permission guard did not run.');
@@ -195,7 +211,18 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 					return {
 						id: expectedMembership,
 						organization: org,
-						roles: systemOwner ? [{ organizationRole: { key: 'owner' } }] : [],
+						roles: systemOwner
+							? [
+									{
+										organizationRole: {
+											key: 'owner',
+											isSystem: true,
+											isActive: true,
+											permissions: [],
+										},
+									},
+								]
+							: [],
 					};
 				},
 			},
@@ -418,6 +445,32 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 			await request(app.getHttpServer()).get(`/api/v1/security-probe/${path}`).expect(403);
 		},
 	);
+	it('checks a declared organization permission against the live selected membership', async () => {
+		const authorized = () =>
+			request(app.getHttpServer())
+				.get('/api/v1/tenant-mutation-probe/permission-read')
+				.set('Host', 'api.akiba.com')
+				.set('Origin', A_ORIGIN)
+				.set('Cookie', `akiba-owner-session=${sealOwnerSession(TOKEN, A_ORIGIN, KEY)}`);
+		await authorized().expect(200, { authorized: true });
+		systemOwner = false;
+		await authorized().expect(403);
+		expect(memberReads).toHaveBeenCalledWith(
+			expect.objectContaining({
+				organizationId: A,
+				id: MEMBERSHIP,
+				userId: USER,
+			}),
+		);
+	});
+	it('denies conflicting tenant identity and permission declarations', async () => {
+		await request(app.getHttpServer())
+			.get('/api/v1/tenant-mutation-probe/conflicting-read')
+			.set('Host', 'api.akiba.com')
+			.set('Origin', A_ORIGIN)
+			.set('Cookie', `akiba-owner-session=${sealOwnerSession(TOKEN, A_ORIGIN, KEY)}`)
+			.expect(403);
+	});
 	it.each(['patch', 'delete', 'post', 'get'] as const)(
 		'fails closed for future tenant %s operations',
 		async (method) => {
