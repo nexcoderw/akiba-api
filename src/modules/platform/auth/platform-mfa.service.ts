@@ -1,3 +1,4 @@
+import { accountCanAuthenticate } from '../../../common/identity/account-state.policy.js';
 import {
 	Injectable,
 	Logger,
@@ -5,7 +6,7 @@ import {
 	UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PlatformStaffStatus, Prisma, PrismaService, UserStatus } from '@nexcoderw/akiba-db';
+import { PlatformStaffStatus, Prisma, PrismaService } from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
 import { databaseErrorCode } from '../../../common/errors/database-error-code.js';
@@ -105,7 +106,7 @@ export class PlatformMfaService {
 											status: true,
 											emailVerifiedAt: true,
 											email: true,
-											passwordCredential: { select: { passwordChangedAt: true } },
+											passwordCredential: { select: { passwordChangedAt: true, disabledAt: true } },
 										},
 									},
 									roles: {
@@ -140,9 +141,11 @@ export class PlatformMfaService {
 						current.expiresAt <= now ||
 						current.failedAttempts >= current.maxAttempts ||
 						current.platformStaff.status !== PlatformStaffStatus.ACTIVE ||
-						current.platformStaff.user.status !== UserStatus.ACTIVE ||
-						current.platformStaff.user.emailVerifiedAt === null ||
-						current.platformStaff.user.passwordCredential === null ||
+						!accountCanAuthenticate(
+							current.platformStaff.user.status,
+							current.platformStaff.user.emailVerifiedAt,
+						) ||
+						current.platformStaff.user.passwordCredential?.disabledAt !== null ||
 						current.platformStaff.user.passwordCredential.passwordChangedAt > current.createdAt ||
 						(!isPlatformSuperadmin(current.platformStaff.roles) &&
 							!current.platformStaff.roles.some(
