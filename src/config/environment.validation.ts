@@ -12,7 +12,6 @@ const DEFAULT_RATE_LIMIT_TTL_MS = 60_000;
 const DEFAULT_RATE_LIMIT_LIMIT = 100;
 const DEFAULT_LOCAL_ORIGIN = 'http://localhost:4000';
 const DEFAULT_MANAGER_ORIGIN = 'http://localhost:4001';
-const OFFLINE_DATABASE_URL = 'postgresql://offline:offline@127.0.0.1:1/akiba_offline';
 const DEFAULT_LOCAL_KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 const DEFAULT_DUMMY_PASSWORD_HASH =
 	'$argon2id$v=19$m=65536,t=3,p=1$c3ludGhldGljLXNhbHQ$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
@@ -152,43 +151,6 @@ function parseTotpKeyring(
 	return Object.freeze(keyring);
 }
 
-function parseBootstrapTarget(
-	databaseUrl: string,
-	enabled: boolean,
-	expectedHostValue: unknown,
-	expectedNameValue: unknown,
-): { readonly expectedHost: string | null; readonly expectedName: string | null } {
-	if (!enabled) {
-		return { expectedHost: null, expectedName: null };
-	}
-
-	const expectedHost = requireString(
-		expectedHostValue,
-		'PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_HOST',
-	).toLowerCase();
-	const expectedName = requireString(
-		expectedNameValue,
-		'PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_NAME',
-	);
-	let target: URL;
-	try {
-		target = new URL(databaseUrl);
-	} catch {
-		throw new Error('DATABASE_URL must be a valid PostgreSQL URL for platform owner bootstrap.');
-	}
-	const databaseName = decodeURIComponent(target.pathname.replace(/^\//u, ''));
-	if (
-		!['postgres:', 'postgresql:'].includes(target.protocol) ||
-		target.hostname.toLowerCase() !== expectedHost ||
-		databaseName !== expectedName
-	) {
-		throw new Error(
-			'The configured database does not match the approved platform owner bootstrap target.',
-		);
-	}
-	return { expectedHost, expectedName };
-}
-
 function parseTrustedProxies(value: unknown): string[] {
 	if (value === undefined || value === '') return [];
 	if (typeof value !== 'string')
@@ -280,26 +242,36 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
 		throw new Error('PLATFORM_TOTP_ACTIVE_KEY_ID must identify a configured TOTP key.');
 	}
 
-	const databaseUrl = requireString(
-		input.DATABASE_URL,
-		'DATABASE_URL',
-		nodeEnvironment === 'test' ? OFFLINE_DATABASE_URL : undefined,
-	);
-	let parsedDatabaseUrl: URL;
-	try {
-		parsedDatabaseUrl = new URL(databaseUrl);
-	} catch {
-		throw new Error('DATABASE_URL must be a valid PostgreSQL URL.');
+	// Offline tests replace the database module; no synthetic connection URL is configured.
+	const databaseUrl =
+		nodeEnvironment === 'test' ? null : requireString(input.DATABASE_URL, 'DATABASE_URL');
+	if (databaseUrl !== null) {
+		let parsedDatabaseUrl: URL;
+		try {
+			parsedDatabaseUrl = new URL(databaseUrl);
+		} catch {
+			throw new Error('DATABASE_URL must be a valid PostgreSQL URL.');
+		}
+		if (!['postgres:', 'postgresql:'].includes(parsedDatabaseUrl.protocol)) {
+			throw new Error('DATABASE_URL must use PostgreSQL.');
+		}
+		if (
+			!parsedDatabaseUrl.hostname ||
+			!parsedDatabaseUrl.username ||
+			!parsedDatabaseUrl.password ||
+			parsedDatabaseUrl.pathname === '' ||
+			parsedDatabaseUrl.pathname === '/'
+		) {
+			throw new Error('DATABASE_URL must specify the configured host, database and credentials.');
+		}
+		if (
+			!['require', 'verify-ca', 'verify-full'].includes(
+				parsedDatabaseUrl.searchParams.get('sslmode') ?? '',
+			)
+		) {
+			throw new Error('DATABASE_URL must require TLS.');
+		}
 	}
-	if (!['postgres:', 'postgresql:'].includes(parsedDatabaseUrl.protocol))
-		throw new Error('DATABASE_URL must use PostgreSQL.');
-	if (
-		nodeEnvironment === 'production' &&
-		!['require', 'verify-ca', 'verify-full'].includes(
-			parsedDatabaseUrl.searchParams.get('sslmode') ?? '',
-		)
-	)
-		throw new Error('DATABASE_URL must require TLS in production.');
 	const swaggerEnabled = parseBoolean(
 		input.SWAGGER_ENABLED,
 		'SWAGGER_ENABLED',
@@ -314,43 +286,8 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
 		'PLATFORM_OWNER_BOOTSTRAP_ENABLED',
 		false,
 	);
-	const bootstrapTarget = parseBootstrapTarget(
-		databaseUrl,
-		bootstrapEnabled,
-		input.PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_HOST,
-		input.PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_NAME,
-	);
-	const bootstrapRole = bootstrapEnabled
-		? requireString(
-				input.PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE,
-				'PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE',
-			)
-		: null;
-	const bootstrapMarker = bootstrapEnabled
-		? requireString(
-				input.PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_MARKER,
-				'PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_MARKER',
-			)
-		: null;
-	if (
-		bootstrapRole !== null &&
-		(!/^akiba_bootstrap(?:_[a-z0-9_]+)?$/u.test(bootstrapRole) || bootstrapRole.length > 63)
-	) {
-		throw new Error('Bootstrap requires a dedicated restricted database role.');
-	}
-	if (
-		bootstrapMarker !== null &&
-		!/^akiba:(?:bootstrap|disposable-bootstrap-test):[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
-			bootstrapMarker,
-		)
-	) {
-		throw new Error('Bootstrap requires a provisioned database marker containing a UUID v4.');
-	}
-	if (
-		bootstrapRole !== null &&
-		decodeURIComponent(new URL(databaseUrl).username) !== bootstrapRole
-	) {
-		throw new Error('The configured bootstrap database role does not match the approved role.');
+	if (bootstrapEnabled && nodeEnvironment === 'test') {
+		throw new Error('Platform owner bootstrap requires the development or production environment.');
 	}
 
 	const sessionTtlSeconds = parseInteger(
@@ -588,9 +525,5 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
 		PLATFORM_TOTP_KEYRING: totpKeyring,
 		PLATFORM_TOTP_ACTIVE_KEY_ID: activeTotpKeyId,
 		PLATFORM_OWNER_BOOTSTRAP_ENABLED: bootstrapEnabled,
-		PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_HOST: bootstrapTarget.expectedHost,
-		PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_NAME: bootstrapTarget.expectedName,
-		PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE: bootstrapRole,
-		PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_MARKER: bootstrapMarker,
 	});
 }
