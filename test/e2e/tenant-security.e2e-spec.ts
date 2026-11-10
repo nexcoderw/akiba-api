@@ -3,7 +3,11 @@ import { Controller, Delete, Get, Patch, Post, UseGuards } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { OrganizationMembershipStatus, OrganizationStatus, PrismaService } from '@nexcoderw/akiba-db';
+import {
+	OrganizationMembershipStatus,
+	OrganizationStatus,
+	PrismaService,
+} from '@nexcoderw/akiba-db';
 import request from 'supertest';
 
 import { configureApplication } from '../../src/app-bootstrap.js';
@@ -38,10 +42,14 @@ const MEMBERSHIP_B = '66666666-6666-4666-8666-666666666666';
 @Controller('security-probe')
 class SecurityProbeController {
 	@Get('unclassified')
-	unclassified(): { secret: string } { return { secret: 'must-not-be-returned' }; }
+	unclassified(): { secret: string } {
+		return { secret: 'must-not-be-returned' };
+	}
 	@Get('unguarded')
 	@AccessBoundary('platform')
-	unguarded(): { secret: string } { return { secret: 'must-not-be-returned' }; }
+	unguarded(): { secret: string } {
+		return { secret: 'must-not-be-returned' };
+	}
 }
 
 @AccessBoundary('organization')
@@ -49,13 +57,21 @@ class SecurityProbeController {
 @Controller('tenant-mutation-probe')
 class TenantMutationProbeController {
 	@Get('future-read')
-	futureRead(): never { throw new Error('Read permission guard did not run.'); }
+	futureRead(): never {
+		throw new Error('Read permission guard did not run.');
+	}
 	@Patch(':id')
-	update(): never { throw new Error('Mutation guard did not run.'); }
+	update(): never {
+		throw new Error('Mutation guard did not run.');
+	}
 	@Delete(':id')
-	remove(): never { throw new Error('Mutation guard did not run.'); }
+	remove(): never {
+		throw new Error('Mutation guard did not run.');
+	}
 	@Post('bulk')
-	bulk(): never { throw new Error('Mutation guard did not run.'); }
+	bulk(): never {
+		throw new Error('Mutation guard did not run.');
+	}
 }
 
 describe('tenant security boundary (offline adapters, real guards and services)', () => {
@@ -75,16 +91,35 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 
 	function sessionRow(token = TOKEN) {
 		const second = token === TOKEN_B;
-		return { id: second ? SESSION_B : SESSION, assurance: 'AAL1', authenticatedAt: new Date('2026-01-01'),
-			idleExpiresAt: new Date('2099-01-01'), absoluteExpiresAt: new Date('2099-01-01'),
+		return {
+			id: second ? SESSION_B : SESSION,
+			assurance: 'AAL1',
+			authenticatedAt: new Date('2026-01-01'),
+			idleExpiresAt: new Date('2099-01-01'),
+			absoluteExpiresAt: new Date('2099-01-01'),
 			revokedAt: revoked ? new Date('2026-01-02') : null,
-			user: { id: second ? USER_B : USER, displayName: 'Fictional Owner', email: 'owner@example.com', status: 'ACTIVE',
+			user: {
+				id: second ? USER_B : USER,
+				displayName: 'Fictional Owner',
+				email: 'owner@example.com',
+				status: 'ACTIVE',
 				emailVerifiedAt: new Date('2025-01-01'),
 				passwordCredential: { passwordChangedAt: new Date('2025-01-01') },
-				organizationMemberships: membershipStatus === OrganizationMembershipStatus.ACTIVE
-					? organizations.filter((org) => !inactiveMemberships.has(org.id) && ((!second && multiple) || org.id === (second ? B : A))).map((organization) => ({
-						id: organization.id === A ? MEMBERSHIP : MEMBERSHIP_B, organization, roles: [{ organizationRole: { key: 'owner' } }],
-					})) : [] },
+				organizationMemberships:
+					membershipStatus === OrganizationMembershipStatus.ACTIVE
+						? organizations
+								.filter(
+									(org) =>
+										!inactiveMemberships.has(org.id) &&
+										((!second && multiple) || org.id === (second ? B : A)),
+								)
+								.map((organization) => ({
+									id: organization.id === A ? MEMBERSHIP : MEMBERSHIP_B,
+									organization,
+									roles: [{ organizationRole: { key: 'owner' } }],
+								}))
+						: [],
+			},
 		};
 	}
 
@@ -96,72 +131,132 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 				if (sql.join('').includes('app.current_organization_id')) scope = value;
 				return Promise.resolve([]);
 			},
-			platformAdminSession: { findUnique: () => Promise.resolve(null), updateMany: () => Promise.resolve({ count: 0 }) },
+			platformAdminSession: {
+				findUnique: () => Promise.resolve(null),
+				updateMany: () => Promise.resolve({ count: 0 }),
+			},
 			ownerSession: {
-				findUnique: (args: { where: { tokenDigest: string } }) => Promise.resolve(
-					args.where.tokenDigest === tokens.sessionDigest(TOKEN) ? sessionRow() :
-					args.where.tokenDigest === tokens.sessionDigest(TOKEN_B) ? sessionRow(TOKEN_B) : null),
-				findFirst: (args: { where: { id: string } }) => Promise.resolve(revoked ? null :
-					sessionRow(args.where.id === SESSION_B ? TOKEN_B : TOKEN)),
+				findUnique: (args: { where: { tokenDigest: string } }) =>
+					Promise.resolve(
+						args.where.tokenDigest === tokens.sessionDigest(TOKEN)
+							? sessionRow()
+							: args.where.tokenDigest === tokens.sessionDigest(TOKEN_B)
+								? sessionRow(TOKEN_B)
+								: null,
+					),
+				findFirst: (args: { where: { id: string } }) =>
+					Promise.resolve(
+						revoked ? null : sessionRow(args.where.id === SESSION_B ? TOKEN_B : TOKEN),
+					),
 				updateMany: () => Promise.resolve({ count: 1 }),
 			},
-			organizationMembership: { findFirst: async (args: { where: {
-				id: string; userId: string; organizationId: string; status: OrganizationMembershipStatus;
-				organization: { slug: string; status: OrganizationStatus };
-			} }) => {
-				memberReads(args.where);
-				await Promise.resolve();
-				if (failNextRead) { failNextRead = false; throw new Error('private-sql secret-connection'); }
-				const org = organizations.find((item) => item.id === args.where.organizationId &&
-					item.slug === args.where.organization.slug && item.status === args.where.organization.status);
-				if (scope !== args.where.organizationId) throw new Error('Missing transaction scope.');
-				if (typeof scope === 'string') observedScopes.push(scope);
-				const expectedMembership = args.where.organizationId === A ? MEMBERSHIP : MEMBERSHIP_B;
-				const allowedUser = (args.where.userId === USER && (args.where.organizationId === A || multiple)) ||
-					(args.where.userId === USER_B && args.where.organizationId === B);
-				if (org === undefined || !allowedUser || args.where.id !== expectedMembership ||
-					args.where.status !== membershipStatus || removedAfterAuthentication) return null;
-				return { id: expectedMembership, organization: org,
-					roles: systemOwner ? [{ organizationRole: { key: 'owner' } }] : [] };
-			} },
+			organizationMembership: {
+				findFirst: async (args: {
+					where: {
+						id: string;
+						userId: string;
+						organizationId: string;
+						status: OrganizationMembershipStatus;
+						organization: { slug: string; status: OrganizationStatus };
+					};
+				}) => {
+					memberReads(args.where);
+					await Promise.resolve();
+					if (failNextRead) {
+						failNextRead = false;
+						throw new Error('private-sql secret-connection');
+					}
+					const org = organizations.find(
+						(item) =>
+							item.id === args.where.organizationId &&
+							item.slug === args.where.organization.slug &&
+							item.status === args.where.organization.status,
+					);
+					if (scope !== args.where.organizationId) throw new Error('Missing transaction scope.');
+					if (typeof scope === 'string') observedScopes.push(scope);
+					const expectedMembership = args.where.organizationId === A ? MEMBERSHIP : MEMBERSHIP_B;
+					const allowedUser =
+						(args.where.userId === USER && (args.where.organizationId === A || multiple)) ||
+						(args.where.userId === USER_B && args.where.organizationId === B);
+					if (
+						org === undefined ||
+						!allowedUser ||
+						args.where.id !== expectedMembership ||
+						args.where.status !== membershipStatus ||
+						removedAfterAuthentication
+					)
+						return null;
+					return {
+						id: expectedMembership,
+						organization: org,
+						roles: systemOwner ? [{ organizationRole: { key: 'owner' } }] : [],
+					};
+				},
+			},
 		};
 		return operation(client);
 	}
 
 	beforeAll(async () => {
-		const config = new ConfigService({ ...validateEnvironment({ NODE_ENV: 'test' }),
-			API_PUBLIC_ORIGIN: 'https://api.akiba.com', CORS_ORIGINS: [A_ORIGIN, B_ORIGIN, 'http://localhost:4000'],
-			ORGANIZATION_PORTAL_ORIGIN: null, ORGANIZATION_PORTAL_BASE_DOMAIN: 'akiba.com', RATE_LIMIT_LIMIT: 10000 });
-		const module = await Test.createTestingModule({ imports: [AppModule, OwnerAuthModule, TenantSecurityModule], controllers: [SecurityProbeController, TenantMutationProbeController] })
-			.overrideModule(DatabaseIntegrationModule).useModule(OfflineDatabaseModule)
-			.overrideProvider(ConfigService).useValue(config)
-			.overrideProvider(PrismaService).useValue({ $transaction: transaction }).compile();
+		const config = new ConfigService({
+			...validateEnvironment({ NODE_ENV: 'test' }),
+			API_PUBLIC_ORIGIN: 'https://api.akiba.com',
+			CORS_ORIGINS: [A_ORIGIN, B_ORIGIN, 'http://localhost:4000'],
+			ORGANIZATION_PORTAL_ORIGIN: null,
+			ORGANIZATION_PORTAL_BASE_DOMAIN: 'akiba.com',
+			RATE_LIMIT_LIMIT: 10000,
+		});
+		const module = await Test.createTestingModule({
+			imports: [AppModule, OwnerAuthModule, TenantSecurityModule],
+			controllers: [SecurityProbeController, TenantMutationProbeController],
+		})
+			.overrideModule(DatabaseIntegrationModule)
+			.useModule(OfflineDatabaseModule)
+			.overrideProvider(ConfigService)
+			.useValue(config)
+			.overrideProvider(PrismaService)
+			.useValue({ $transaction: transaction })
+			.compile();
 		tokens = module.get(OwnerTokenService);
 		tenant = module.get(TenantAuthorizationService);
 		app = module.createNestApplication<NestExpressApplication>({ bodyParser: false });
 		configureApplication(app, { CORS_ORIGINS: [A_ORIGIN, B_ORIGIN], SWAGGER_ENABLED: false });
 		await app.init();
 	});
-	afterAll(async () => { await app.close(); });
+	afterAll(async () => {
+		await app.close();
+	});
 	beforeEach(() => {
-		organizations = [{ id: A, name: 'Musomesa', slug: 'musomesa', status: OrganizationStatus.ACTIVE },
-			{ id: B, name: 'Company B', slug: 'companyb', status: OrganizationStatus.ACTIVE }];
+		organizations = [
+			{ id: A, name: 'Musomesa', slug: 'musomesa', status: OrganizationStatus.ACTIVE },
+			{ id: B, name: 'Company B', slug: 'companyb', status: OrganizationStatus.ACTIVE },
+		];
 		membershipStatus = OrganizationMembershipStatus.ACTIVE;
-		revoked = false; multiple = false; removedAfterAuthentication = false; systemOwner = true; failNextRead = false;
+		revoked = false;
+		multiple = false;
+		removedAfterAuthentication = false;
+		systemOwner = true;
+		failNextRead = false;
 		inactiveMemberships = new Set();
-		observedScopes.length = 0; memberReads.mockClear(); app.set('trust proxy', false);
+		observedScopes.length = 0;
+		memberReads.mockClear();
+		app.set('trust proxy', false);
 	});
 
 	function call(id = A, origin = A_ORIGIN, cookieOrigin = origin, token = TOKEN): request.Test {
-		return request(app.getHttpServer()).get(`/api/v1/owner/organizations/${id}/dashboard`)
-			.set('Host', 'api.akiba.com').set('Origin', origin)
+		return request(app.getHttpServer())
+			.get(`/api/v1/owner/organizations/${id}/dashboard`)
+			.set('Host', 'api.akiba.com')
+			.set('Origin', origin)
 			.set('Cookie', `akiba-owner-session=${sealOwnerSession(token, cookieOrigin, KEY)}`);
 	}
 
 	it('returns only the authenticated organization with explicit scoped persistence', async () => {
 		const response = await call().expect(200);
 		expect(response.body).toMatchObject({ organizationId: A, organizationName: 'Musomesa' });
-		expect(memberReads).toHaveBeenCalledWith(expect.objectContaining({ organizationId: A, userId: USER, id: MEMBERSHIP }));
+		expect(memberReads).toHaveBeenCalledWith(
+			expect.objectContaining({ organizationId: A, userId: USER, id: MEMBERSHIP }),
+		);
 		expect(observedScopes).toEqual([A]);
 	});
 	it('denies missing credentials and platform cookies at organization routes', async () => {
@@ -170,7 +265,11 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 	});
 	it('denies another organization identifier without exposing its existence', async () => {
 		const response = await call(B).expect(404);
-		expect(response.body).toMatchObject({ code: 'RESOURCE_NOT_FOUND', status: 404, requestId: response.get('X-Request-Id') });
+		expect(response.body).toMatchObject({
+			code: 'RESOURCE_NOT_FOUND',
+			status: 404,
+			requestId: response.get('X-Request-Id'),
+		});
 		expect(JSON.stringify(response.body)).not.toContain('Company B');
 		expect(memberReads).not.toHaveBeenCalled();
 	});
@@ -185,7 +284,8 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 		await call(B, B_ORIGIN).expect(200);
 	});
 	it('checks the selected membership rather than another active membership', async () => {
-		multiple = true; inactiveMemberships.add(B);
+		multiple = true;
+		inactiveMemberships.add(B);
 		await call().expect(200);
 		await call(B, B_ORIGIN).expect(404);
 	});
@@ -195,82 +295,148 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 		expect(denied.get('Content-Type')).toContain('application/problem+json');
 		const deniedBody: unknown = denied.body;
 		const absentBody: unknown = absent.body;
-		if (typeof deniedBody !== 'object' || deniedBody === null || !('detail' in deniedBody) ||
-			typeof absentBody !== 'object' || absentBody === null || !('detail' in absentBody)) throw new Error('Missing problem.');
+		if (
+			typeof deniedBody !== 'object' ||
+			deniedBody === null ||
+			!('detail' in deniedBody) ||
+			typeof absentBody !== 'object' ||
+			absentBody === null ||
+			!('detail' in absentBody)
+		)
+			throw new Error('Missing problem.');
 		expect(deniedBody.detail).toBe(absentBody.detail);
 	});
-	it.each([OrganizationMembershipStatus.SUSPENDED, OrganizationMembershipStatus.REVOKED, OrganizationMembershipStatus.PENDING])(
-		'denies inactive membership %s', async (status) => { membershipStatus = status; await call().expect(404); });
+	it.each([
+		OrganizationMembershipStatus.SUSPENDED,
+		OrganizationMembershipStatus.REVOKED,
+		OrganizationMembershipStatus.PENDING,
+	])('denies inactive membership %s', async (status) => {
+		membershipStatus = status;
+		await call().expect(404);
+	});
 	it.each([OrganizationStatus.PENDING, OrganizationStatus.SUSPENDED, OrganizationStatus.ARCHIVED])(
-		'denies nonoperating organization %s', async (status) => { organizations[0] = { id: A, name: 'Musomesa', slug: 'musomesa', status }; await call().expect(404); });
+		'denies nonoperating organization %s',
+		async (status) => {
+			organizations[0] = { id: A, name: 'Musomesa', slug: 'musomesa', status };
+			await call().expect(404);
+		},
+	);
 	it('rechecks revocation and membership inside the data operation', async () => {
-		removedAfterAuthentication = true; await call().expect(404);
-		removedAfterAuthentication = false; revoked = true; await call().expect(401);
+		removedAfterAuthentication = true;
+		await call().expect(404);
+		removedAfterAuthentication = false;
+		revoked = true;
+		await call().expect(401);
 	});
 	it('does not grant identity access to a non-system owner role', async () => {
-		systemOwner = false; await call().expect(404);
+		systemOwner = false;
+		await call().expect(404);
 	});
 	it('ignores injected tenant headers, body fields and query selections', async () => {
-		const response = await call().set('X-Tenant-ID', B).set('X-Organization-ID', B)
-			.query({ organizationId: B }).send({ organizationId: B, platformRole: 'platform.owner' }).expect(200);
+		const response = await call()
+			.set('X-Tenant-ID', B)
+			.set('X-Organization-ID', B)
+			.query({ organizationId: B })
+			.send({ organizationId: B, platformRole: 'platform.owner' })
+			.expect(200);
 		expect(response.body).toMatchObject({ organizationId: A });
 	});
-	it.each(['companyb.akiba.com', 'attacker.example', 'admin.akiba.com', 'api.akiba.com.attacker.example'])
-		('rejects manipulated Host %s', async (host) => { await call().set('Host', host).expect(404); });
+	it.each([
+		'companyb.akiba.com',
+		'attacker.example',
+		'admin.akiba.com',
+		'api.akiba.com.attacker.example',
+	])('rejects manipulated Host %s', async (host) => {
+		await call().set('Host', host).expect(404);
+	});
 	it('ignores untrusted forwarding and validates forwarding from a reviewed proxy', async () => {
 		await call().set('X-Forwarded-Host', 'companyb.akiba.com').expect(200);
 		app.set('trust proxy', ['127.0.0.1/32', '::1/128', '::ffff:127.0.0.1/128']);
 		await call().set('Host', 'internal').set('X-Forwarded-Host', 'musomesa.akiba.com').expect(200);
-		await call().set('Host', 'internal').set('X-Forwarded-Host', 'musomesa.akiba.com, companyb.akiba.com').expect(404);
+		await call()
+			.set('Host', 'internal')
+			.set('X-Forwarded-Host', 'musomesa.akiba.com, companyb.akiba.com')
+			.expect(404);
 	});
-	it.each(['https://admin.akiba.com', 'https://musomesa.akiba.com.attacker.example', 'https://unknown.akiba.com'])
-		('rejects unapproved or reserved portal origins %s', async (origin) => { await call(A, origin).expect(404); });
+	it.each([
+		'https://admin.akiba.com',
+		'https://musomesa.akiba.com.attacker.example',
+		'https://unknown.akiba.com',
+	])('rejects unapproved or reserved portal origins %s', async (origin) => {
+		await call(A, origin).expect(404);
+	});
 	it('keeps parallel organization requests separate after a failed operation', async () => {
-		failNextRead = true; const failure = await call().expect(500);
+		failNextRead = true;
+		const failure = await call().expect(500);
 		expect(JSON.stringify(failure.body)).not.toMatch(/private-sql|secret-connection/u);
 		multiple = true;
-		const responses = await Promise.all([call().expect(200), call(B, B_ORIGIN, B_ORIGIN, TOKEN_B).expect(200)]);
+		const responses = await Promise.all([
+			call().expect(200),
+			call(B, B_ORIGIN, B_ORIGIN, TOKEN_B).expect(200),
+		]);
 		expect(responses.map((response) => response.body as unknown)).toEqual([
-			expect.objectContaining({ organizationId: A }), expect.objectContaining({ organizationId: B }),
+			expect.objectContaining({ organizationId: A }),
+			expect.objectContaining({ organizationId: B }),
 		]);
 	});
 	it('does not promote an organization owner to platform administration', async () => {
-		await request(app.getHttpServer()).get('/api/v1/platform/dashboard/summary')
-			.set('Origin', 'http://localhost:4000').set('Cookie', `akiba-owner-session=${sealOwnerSession(TOKEN, A_ORIGIN, KEY)}`).expect(401);
+		await request(app.getHttpServer())
+			.get('/api/v1/platform/dashboard/summary')
+			.set('Origin', 'http://localhost:4000')
+			.set('Cookie', `akiba-owner-session=${sealOwnerSession(TOKEN, A_ORIGIN, KEY)}`)
+			.expect(401);
 	});
 	it('cannot promote an owner credential by renaming its cookie to a platform cookie', async () => {
-		await request(app.getHttpServer()).get('/api/v1/platform/dashboard/summary')
+		await request(app.getHttpServer())
+			.get('/api/v1/platform/dashboard/summary')
 			.set('Origin', 'http://localhost:4000')
-			.set('Cookie', `akiba-platform-session=${sealOwnerSession(TOKEN, A_ORIGIN, KEY)}`).expect(401);
+			.set('Cookie', `akiba-platform-session=${sealOwnerSession(TOKEN, A_ORIGIN, KEY)}`)
+			.expect(401);
 	});
-	it.each(['unclassified', 'unguarded'])('denies a route missing its declared protections: %s', async (path) => {
-		await request(app.getHttpServer()).get(`/api/v1/security-probe/${path}`).expect(403);
-	});
-	it.each(['patch', 'delete', 'post', 'get'] as const)('fails closed for future tenant %s operations', async (method) => {
-		const path = method === 'post' ? 'bulk' : method === 'get' ? 'future-read' : B;
-		const response = await request(app.getHttpServer())[method](`/api/v1/tenant-mutation-probe/${path}`)
-			.set('Host', 'api.akiba.com').set('Origin', A_ORIGIN)
-			.set('Cookie', `akiba-owner-session=${sealOwnerSession(TOKEN, A_ORIGIN, KEY)}`)
-			.send({ organizationId: B, nested: { organizationId: B }, role: 'platform.owner' }).expect(403);
-		expect(response.body).toMatchObject({ code: 'ORGANIZATION_ACCESS_DENIED' });
-		expect(memberReads).not.toHaveBeenCalled();
-	});
+	it.each(['unclassified', 'unguarded'])(
+		'denies a route missing its declared protections: %s',
+		async (path) => {
+			await request(app.getHttpServer()).get(`/api/v1/security-probe/${path}`).expect(403);
+		},
+	);
+	it.each(['patch', 'delete', 'post', 'get'] as const)(
+		'fails closed for future tenant %s operations',
+		async (method) => {
+			const path = method === 'post' ? 'bulk' : method === 'get' ? 'future-read' : B;
+			const response = await request(app.getHttpServer())
+				[method](`/api/v1/tenant-mutation-probe/${path}`)
+				.set('Host', 'api.akiba.com')
+				.set('Origin', A_ORIGIN)
+				.set('Cookie', `akiba-owner-session=${sealOwnerSession(TOKEN, A_ORIGIN, KEY)}`)
+				.send({ organizationId: B, nested: { organizationId: B }, role: 'platform.owner' })
+				.expect(403);
+			expect(response.body).toMatchObject({ code: 'ORGANIZATION_ACCESS_DENIED' });
+			expect(memberReads).not.toHaveBeenCalled();
+		},
+	);
 	it('rejects forged or copied contexts and fails closed for future permissioned operations', async () => {
 		const establish = jest.spyOn(tenant, 'establish');
 		try {
-		await call().expect(200);
-		const result = establish.mock.results[0];
-		if (result?.type !== 'return') throw new Error('No trusted context was established.');
-		const context = await result.value;
-		expect(Object.isFrozen(context)).toBe(true);
-		expect(Object.isFrozen(context.resourceScope)).toBe(true);
-		expect(() => tenant.assert({ ...context, organizationId: B })).toThrow();
-		expect(() => tenant.assert({ ...context })).toThrow();
-		for (const operation of ['inventory.read', 'inventory.update', 'inventory.delete', 'roles.assign', 'branches.read']) {
-			expect(() => tenant.requirePermissions(context, [operation])).toThrow();
+			await call().expect(200);
+			const result = establish.mock.results[0];
+			if (result?.type !== 'return') throw new Error('No trusted context was established.');
+			const context = await result.value;
+			expect(Object.isFrozen(context)).toBe(true);
+			expect(Object.isFrozen(context.resourceScope)).toBe(true);
+			expect(() => {
+				tenant.assert({ ...context, organizationId: B });
+			}).toThrow();
+			expect(() => {
+				tenant.assert({ ...context });
+			}).toThrow();
+			expect(() => tenant.requirePermissions(context)).toThrow();
+			expect(tenant.resourceWhere(context, B)).toEqual({ organizationId: A, id: B });
+			expect(tenant.resourceWhereMany(context, [A, B])).toEqual({
+				organizationId: A,
+				id: { in: [A, B] },
+			});
+		} finally {
+			establish.mockRestore();
 		}
-		expect(tenant.resourceWhere(context, B)).toEqual({ organizationId: A, id: B });
-		expect(tenant.resourceWhereMany(context, [A, B])).toEqual({ organizationId: A, id: { in: [A, B] } });
-		} finally { establish.mockRestore(); }
 	});
 });
