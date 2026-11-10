@@ -12,7 +12,7 @@ describe('validateEnvironment', () => {
 			SWAGGER_ENABLED: true,
 			RATE_LIMIT_TTL_MS: 60_000,
 			RATE_LIMIT_LIMIT: 100,
-			DATABASE_URL: 'postgresql://offline:offline@127.0.0.1:1/akiba_offline',
+			DATABASE_URL: null,
 			DATABASE_POOL_MAX: 10,
 			DATABASE_CONNECTION_TIMEOUT_MS: 10_000,
 			PLATFORM_ADMIN_ORIGIN: 'http://localhost:4000',
@@ -46,10 +46,6 @@ describe('validateEnvironment', () => {
 			},
 			PLATFORM_TOTP_ACTIVE_KEY_ID: 'local-v1',
 			PLATFORM_OWNER_BOOTSTRAP_ENABLED: false,
-			PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_HOST: null,
-			PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_NAME: null,
-			PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE: null,
-			PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_MARKER: null,
 		});
 	});
 
@@ -139,7 +135,8 @@ describe('validateEnvironment', () => {
 		const configuration = validateEnvironment({
 			NODE_ENV: 'production',
 			CORS_ORIGINS: 'https://akiba.com,https://admin.akiba.com',
-			DATABASE_URL: 'postgresql://akiba_app:password@database.example/akiba?sslmode=require',
+			DATABASE_URL:
+				'postgresql://neondb_owner:fictional@production.example.com/neondb?sslmode=require',
 			PLATFORM_ADMIN_ORIGIN: 'https://admin.akiba.com',
 			PLATFORM_AUTH_DUMMY_PASSWORD_HASH:
 				'$argon2id$v=19$m=65536,t=3,p=1$c3ludGhldGljLXNhbHQ$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
@@ -158,18 +155,35 @@ describe('validateEnvironment', () => {
 		expect(configuration.ORGANIZATION_PORTAL_BASE_DOMAIN).toBe('akiba.com');
 	});
 
-	it('requires an exact database fingerprint when owner bootstrap is enabled', () => {
+	it('uses the existing managed owner connection for explicit development bootstrap', () => {
+		const config = validateEnvironment({
+			NODE_ENV: 'development',
+			DATABASE_URL:
+				'postgresql://neondb_owner:fictional@development.example.com/neondb?sslmode=require',
+			PLATFORM_OWNER_BOOTSTRAP_ENABLED: 'true',
+		});
+		expect(config.PLATFORM_OWNER_BOOTSTRAP_ENABLED).toBe(true);
+	});
+
+	it('cannot enable live bootstrap in the offline test process', () => {
+		expect(() =>
+			validateEnvironment({ NODE_ENV: 'test', PLATFORM_OWNER_BOOTSTRAP_ENABLED: 'true' }),
+		).toThrow('development or production');
+	});
+
+	it('does not retain an injected connection URL in offline configuration', () => {
+		expect(
+			validateEnvironment({ NODE_ENV: 'test', DATABASE_URL: 'private-value' }).DATABASE_URL,
+		).toBeNull();
+	});
+
+	it('requires encrypted development database connections', () => {
 		expect(() =>
 			validateEnvironment({
-				NODE_ENV: 'test',
-				DATABASE_URL: 'postgresql://akiba_bootstrap:secret@approved.neon.tech/neondb',
-				PLATFORM_OWNER_BOOTSTRAP_ENABLED: 'true',
-				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_HOST: 'wrong.neon.tech',
-				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_NAME: 'neondb',
+				NODE_ENV: 'development',
+				DATABASE_URL: 'postgresql://neondb_owner:fictional@development.example.com/neondb',
 			}),
-		).toThrow(
-			'The configured database does not match the approved platform owner bootstrap target.',
-		);
+		).toThrow('TLS');
 	});
 
 	it('rejects the development key material in production', () => {
@@ -177,7 +191,8 @@ describe('validateEnvironment', () => {
 			validateEnvironment({
 				NODE_ENV: 'production',
 				CORS_ORIGINS: 'https://admin.akiba.com',
-				DATABASE_URL: 'postgresql://akiba_app:password@database.example/akiba?sslmode=require',
+				DATABASE_URL:
+					'postgresql://neondb_owner:fictional@production.example.com/neondb?sslmode=require',
 				PLATFORM_ADMIN_ORIGIN: 'https://admin.akiba.com',
 				PLATFORM_AUTH_DUMMY_PASSWORD_HASH:
 					'$argon2id$v=19$m=65536,t=3,p=1$c3ludGhldGljLXNhbHQ$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
@@ -187,38 +202,5 @@ describe('validateEnvironment', () => {
 				ORGANIZATION_PORTAL_BASE_DOMAIN: 'akiba.com',
 			}),
 		).toThrow('PLATFORM_AUTH_TOKEN_PEPPER must not use the local development key.');
-	});
-
-	it.each([
-		{ role: 'neondb_owner', marker: 'akiba:bootstrap:724fbc40-515c-4a30-a4bb-8a6458a24396' },
-		{ role: 'akiba_app', marker: 'akiba:bootstrap:724fbc40-515c-4a30-a4bb-8a6458a24396' },
-		{ role: 'akiba_bootstrap', marker: 'unprovisioned' },
-	])('rejects inappropriate bootstrap role or marker %j', ({ role, marker }) => {
-		expect(() =>
-			validateEnvironment({
-				NODE_ENV: 'test',
-				DATABASE_URL: `postgresql://${role}:fictional@approved.neon.tech/neondb`,
-				PLATFORM_OWNER_BOOTSTRAP_ENABLED: 'true',
-				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_HOST: 'approved.neon.tech',
-				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_NAME: 'neondb',
-				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE: role,
-				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_MARKER: marker,
-			}),
-		).toThrow();
-	});
-
-	it('requires the configured URL user to match the approved operator role', () => {
-		expect(() =>
-			validateEnvironment({
-				NODE_ENV: 'test',
-				DATABASE_URL: 'postgresql://akiba_app:fictional@approved.neon.tech/neondb',
-				PLATFORM_OWNER_BOOTSTRAP_ENABLED: 'true',
-				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_HOST: 'approved.neon.tech',
-				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_NAME: 'neondb',
-				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE: 'akiba_bootstrap',
-				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_MARKER:
-					'akiba:bootstrap:724fbc40-515c-4a30-a4bb-8a6458a24396',
-			}),
-		).toThrow('The configured bootstrap database role does not match the approved role.');
 	});
 });
