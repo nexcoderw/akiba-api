@@ -2,7 +2,7 @@ import { jest } from '@jest/globals';
 import {
 	OrganizationOwnerInvitationStatus,
 	type OrganizationOwnerInvitation,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 
 import {
 	createPlatformOrganizationsDatabaseFixture,
