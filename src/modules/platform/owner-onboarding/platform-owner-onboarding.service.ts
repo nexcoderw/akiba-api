@@ -44,7 +44,11 @@ export class PlatformOwnerOnboardingService {
 		input: CreateOwnerInvitationDto,
 	): Promise<OwnerInvitationResponseDto> {
 		context = Object.freeze({ ...context });
-		await this.sessions.authorize(principal, PLATFORM_PERMISSION.organizationOwnersInvite, context.actorPlatformStaffId);
+		await this.sessions.authorize(
+			principal,
+			PLATFORM_PERMISSION.organizationOwnersInvite,
+			context.actorPlatformStaffId,
+		);
 		this.audit.assertAvailable();
 		try {
 			return await this.prisma.$transaction(
@@ -162,7 +166,11 @@ export class PlatformOwnerOnboardingService {
 		invitationId: string,
 	): Promise<OwnerInvitationResponseDto> {
 		context = Object.freeze({ ...context });
-		await this.sessions.authorize(principal, PLATFORM_PERMISSION.organizationOwnersRevokeInvitation, context.actorPlatformStaffId);
+		await this.sessions.authorize(
+			principal,
+			PLATFORM_PERMISSION.organizationOwnersRevokeInvitation,
+			context.actorPlatformStaffId,
+		);
 		this.audit.assertAvailable();
 		try {
 			return await this.prisma.$transaction(
