@@ -9,4 +9,4 @@ responses. Preserve meaningful 4xx/5xx statuses. Domain context controls identit
 Retain causes internally, but log only reviewed diagnostic codes and server correlation IDs through
 the sanitized logger. No stacks, SQL, connection strings, credentials, arbitrary payloads or raw
 exception messages in ordinary logs. Roll back failed operations; never disguise failures as 200.
-See `docs/api/error-contract.md` for the client contract and compatibility policy.
+Keep the public contract in executable OpenAPI metadata and essential README guidance.
