@@ -7,9 +7,8 @@ import {
 } from '../../src/modules/platform/bootstrap/platform-bootstrap-database.js';
 
 const target = {
-	databaseName: 'akiba_bootstrap_test',
-	databaseRole: 'akiba_bootstrap_test',
-	databaseMarker: 'akiba:disposable-bootstrap-test:724fbc40-515c-4a30-a4bb-8a6458a24396',
+	databaseName: 'neondb',
+	databaseRole: 'neondb_owner',
 };
 
 describe('bootstrap PostgreSQL safety boundary', () => {
@@ -42,21 +41,13 @@ describe('bootstrap PostgreSQL safety boundary', () => {
 
 	it.each([
 		{ databaseName: 'wrong' },
-		{ databaseRole: 'akiba_app' },
-		{ sessionRole: 'neondb_owner' },
-		{ databaseMarker: null },
-		{ unsafeRole: true },
-		{ canCreate: true },
-		{ ownsObjects: true },
-		{ unsafeRole: undefined },
-	])('rejects unsafe connected identity %j', async (override) => {
+		{ databaseRole: 'unexpected_user' },
+		{ sessionRole: 'unexpected_user' },
+	])('rejects a mismatched connected identity %j', async (override) => {
 		queryRaw.mockResolvedValue([
 			{
 				...target,
 				sessionRole: target.databaseRole,
-				unsafeRole: false,
-				canCreate: false,
-				ownsObjects: false,
 				...override,
 			},
 		]);
@@ -65,14 +56,24 @@ describe('bootstrap PostgreSQL safety boundary', () => {
 		});
 	});
 
-	it('accepts only the expected connected identity with restricted privileges', async () => {
+	it.each([
+		{ rows: null },
+		{ rows: [] },
+		{ rows: [null] },
+		{ rows: [{ ...target }] },
+		{ rows: [{ ...target, sessionRole: target.databaseRole }, target] },
+	])('rejects an unconfirmed database identity %j', async ({ rows }) => {
+		queryRaw.mockResolvedValue(rows);
+		await expect(verifyBootstrapDatabase(transaction, target)).rejects.toMatchObject({
+			code: 'BOOTSTRAP_UNSAFE_DATABASE',
+		});
+	});
+
+	it('accepts the configured managed owner without provisioning another role', async () => {
 		queryRaw.mockResolvedValue([
 			{
 				...target,
 				sessionRole: target.databaseRole,
-				unsafeRole: false,
-				canCreate: false,
-				ownsObjects: false,
 			},
 		]);
 		await expect(verifyBootstrapDatabase(transaction, target)).resolves.toBeUndefined();
