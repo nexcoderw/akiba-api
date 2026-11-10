@@ -5,7 +5,7 @@ import {
 	UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PlatformStaffStatus, Prisma, PrismaService, UserStatus } from '@nexcoderw/gym-db';
+import { PlatformStaffStatus, Prisma, PrismaService, UserStatus } from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
 import { databaseErrorCode } from '../../../common/errors/database-error-code.js';
@@ -237,10 +237,14 @@ export class PlatformMfaService {
 		}
 
 		if (!outcome.authenticated) {
-			this.logger.warn(`platform_mfa_rejected challengeId=${outcome.challengeId ?? 'unavailable'}`);
+			this.logger.warn(
+				JSON.stringify({ event: 'platform_mfa_rejected', challengeId: outcome.challengeId }),
+			);
 			throw new UnauthorizedException(PLATFORM_AUTH_ERROR.invalidChallenge);
 		}
-		this.logger.log(`platform_session_created staffId=${outcome.platformStaffId}`);
+		this.logger.log(
+			JSON.stringify({ event: 'platform_session_created', staffId: outcome.platformStaffId }),
+		);
 		return {
 			status: 'authenticated',
 			expiresAt: outcome.expiresAt.toISOString(),
