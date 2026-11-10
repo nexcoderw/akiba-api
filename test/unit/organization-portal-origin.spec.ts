@@ -6,12 +6,12 @@ import {
 } from '../../src/config/organization-portal-origin.js';
 
 describe('organization portal origin policy', () => {
-	const productionPolicy = { fixedOrigin: null, baseDomain: 'mucyora.rw' };
+	const productionPolicy = { fixedOrigin: null, baseDomain: 'akiba.com' };
 
-	it.each(['soho', 'diamondgym', 'kigali-strength-club'])(
+	it.each(['kimihurura', 'diamond-supplies', 'kigali-trading'])(
 		'accepts one valid organization slug: %s',
 		(slug) => {
-			const origin = `https://${slug}.mucyora.rw`;
+			const origin = `https://${slug}.akiba.com`;
 			expect(isOrganizationPortalOrigin(origin, productionPolicy)).toBe(true);
 			expect(organizationSlugFromPortalOrigin(origin, productionPolicy)).toBe(slug);
 			expect(organizationPortalOriginForSlug(slug, productionPolicy)).toBe(origin);
@@ -19,15 +19,15 @@ describe('organization portal origin policy', () => {
 	);
 
 	it.each([
-		'http://soho.mucyora.rw',
-		'https://mucyora.rw',
-		'https://admin.mucyora.rw',
-		'https://api.mucyora.rw',
-		'https://notify.mucyora.rw',
-		'https://branch.soho.mucyora.rw',
-		'https://soho.mucyora.rw.attacker.example',
-		'https://soho.mucyora.rw:444',
-		'https://soho.mucyora.rw/path',
+		'http://kimihurura.akiba.com',
+		'https://akiba.com',
+		'https://admin.akiba.com',
+		'https://api.akiba.com',
+		'https://notify.akiba.com',
+		'https://branch.kimihurura.akiba.com',
+		'https://kimihurura.akiba.com.attacker.example',
+		'https://kimihurura.akiba.com:444',
+		'https://kimihurura.akiba.com/path',
 	])('rejects an unsafe production origin: %s', (origin) => {
 		expect(isOrganizationPortalOrigin(origin, productionPolicy)).toBe(false);
 		expect(organizationSlugFromPortalOrigin(origin, productionPolicy)).toBeNull();
@@ -36,8 +36,10 @@ describe('organization portal origin policy', () => {
 	it('keeps local development on the configured exact origin', () => {
 		const localPolicy = { fixedOrigin: 'http://localhost:4001', baseDomain: null };
 		expect(isOrganizationPortalOrigin('http://localhost:4001', localPolicy)).toBe(true);
-		expect(isOrganizationPortalOrigin('http://soho.localhost:4001', localPolicy)).toBe(false);
-		expect(organizationPortalOriginForSlug('soho', localPolicy)).toBe('http://localhost:4001');
+		expect(isOrganizationPortalOrigin('http://kimihurura.localhost:4001', localPolicy)).toBe(false);
+		expect(organizationPortalOriginForSlug('kimihurura', localPolicy)).toBe(
+			'http://localhost:4001',
+		);
 	});
 
 	it('keeps fixed origins local and base-domain routing production-only', () => {
@@ -49,7 +51,7 @@ describe('organization portal origin policy', () => {
 		).toThrow('production-only');
 		expect(() =>
 			parseOrganizationPortalOriginPolicy(
-				{ ORGANIZATION_PORTAL_ORIGIN: 'https://soho.example.com' },
+				{ ORGANIZATION_PORTAL_ORIGIN: 'https://kimihurura.example.com' },
 				true,
 			),
 		).toThrow('instead of a fixed portal origin');
