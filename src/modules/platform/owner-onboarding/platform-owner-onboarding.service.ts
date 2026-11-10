@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { OrganizationOwnerInvitationStatus, Prisma, PrismaService } from '@nexcoderw/gym-db';
+import { OrganizationOwnerInvitationStatus, Prisma, PrismaService } from '@nexcoderw/akiba-db';
 
 import type { CreateOwnerInvitationDto } from './dto/create-owner-invitation.dto.js';
 import type { ListOwnerInvitationsQueryDto } from './dto/list-owner-invitations-query.dto.js';
