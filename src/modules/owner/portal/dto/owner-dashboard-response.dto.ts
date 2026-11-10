@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { OrganizationStatus } from '@nexcoderw/gym-db';
+import { OrganizationStatus } from '@nexcoderw/akiba-db';
 
 export class OwnerDashboardResponseDto {
 	@ApiProperty({ format: 'uuid' })
@@ -8,7 +8,7 @@ export class OwnerDashboardResponseDto {
 	@ApiProperty({ example: 'Kigali Strength Club' })
 	organizationName!: string;
 
-	@ApiProperty({ example: 'kigali-strength-club' })
+	@ApiProperty({ example: 'kigali-trading' })
 	organizationSlug!: string;
 
 	@ApiProperty({ format: 'uuid' })
