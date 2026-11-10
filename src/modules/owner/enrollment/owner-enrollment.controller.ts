@@ -129,7 +129,12 @@ export class OwnerEnrollmentController {
 		return this.setAuthenticated(
 			response,
 			request.headers.origin ?? '',
-			await this.enrollment.register(input, undefined, request.ownerOrganizationSlug),
+			await this.enrollment.register(
+				input,
+				undefined,
+				request.ownerOrganizationSlug,
+				request.requestId,
+			),
 		);
 	}
 
