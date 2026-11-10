@@ -7,9 +7,9 @@ import {
 } from '../../src/modules/platform/bootstrap/platform-bootstrap-database.js';
 
 const target = {
-	databaseName: 'gym_bootstrap_test',
-	databaseRole: 'gym_bootstrap_test',
-	databaseMarker: 'nexcode-gym:disposable-bootstrap-test:724fbc40-515c-4a30-a4bb-8a6458a24396',
+	databaseName: 'akiba_bootstrap_test',
+	databaseRole: 'akiba_bootstrap_test',
+	databaseMarker: 'akiba:disposable-bootstrap-test:724fbc40-515c-4a30-a4bb-8a6458a24396',
 };
 
 describe('bootstrap PostgreSQL safety boundary', () => {
@@ -42,7 +42,7 @@ describe('bootstrap PostgreSQL safety boundary', () => {
 
 	it.each([
 		{ databaseName: 'wrong' },
-		{ databaseRole: 'gym_app' },
+		{ databaseRole: 'akiba_app' },
 		{ sessionRole: 'neondb_owner' },
 		{ databaseMarker: null },
 		{ unsafeRole: true },
