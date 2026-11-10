@@ -94,7 +94,7 @@ export class TenantAuthorizationService {
 		});
 	}
 
-	/** No organization permission/branch catalog exists yet. Owner status grants no blanket access. */
+	/** Unclassified tenant operations remain denied; explicit capability checks use the authorization service. */
 	requirePermissions(context: TenantSecurityContext): never {
 		this.assert(context);
 		throw new ApiProblemException('ORGANIZATION_ACCESS_DENIED');
