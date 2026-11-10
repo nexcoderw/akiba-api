@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { OrganizationStatus } from '@nexcoderw/gym-db';
+import { OrganizationStatus } from '@nexcoderw/akiba-db';
 
 export class OwnerOrganizationAccessDto {
 	@ApiProperty({ format: 'uuid' })
@@ -8,7 +8,7 @@ export class OwnerOrganizationAccessDto {
 	@ApiProperty({ example: 'Kigali Strength Club' })
 	name!: string;
 
-	@ApiProperty({ example: 'kigali-strength-club' })
+	@ApiProperty({ example: 'kigali-trading' })
 	slug!: string;
 
 	@ApiProperty({ enum: OrganizationStatus })
