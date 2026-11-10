@@ -95,8 +95,8 @@ export class OrganizationAuthorizationService {
 		});
 		if (session === null) throw new ApiProblemException('UNAUTHENTICATED');
 		const credential = session.user.passwordCredential;
+		if (credential === null) throw new ApiProblemException('UNAUTHENTICATED');
 		if (
-			credential === null ||
 			credential.disabledAt !== null ||
 			credential.passwordChangedAt > session.authenticatedAt ||
 			session.assurance !== context.assurance
