@@ -1,4 +1,4 @@
-import type { OrganizationStatus } from '@nexcoderw/gym-db';
+import type { OrganizationStatus } from '@nexcoderw/akiba-db';
 
 export interface OwnerOrganizationAccess {
 	readonly organizationId: string;
