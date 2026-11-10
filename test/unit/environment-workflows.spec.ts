@@ -6,23 +6,27 @@ async function readRootFile(name: string): Promise<string> {
 }
 
 describe('API workflow environment boundaries', () => {
-	it('separates operator and disposable bootstrap databases on one endpoint', async () => {
+	it('uses an explicit development Neon placeholder without provisioning an extra database', async () => {
 		const runtime = parseEnv(await readRootFile('.env.local.example'));
-		const operator = parseEnv(await readRootFile('.env.bootstrap.local.example'));
-		const tests = parseEnv(await readRootFile('.env.bootstrap-test.local.example'));
-		const targets = [
-			[runtime.DATABASE_URL, '/gym_dev', 'gym_app'],
-			[operator.DATABASE_URL, '/gym_dev', 'gym_bootstrap'],
-			[tests.BOOTSTRAP_TEST_DATABASE_URL, '/gym_bootstrap_test', 'gym_bootstrap_test'],
-		];
-		for (const [value, database, role] of targets) {
-			if (value === undefined) throw new Error('A development database target is missing.');
-			const url = new URL(value);
-			expect(url.hostname).toBe('localhost');
-			expect(url.pathname).toBe(database);
-			expect(url.username).toBe(role);
+		if (runtime.DATABASE_URL === undefined) throw new Error('Missing runtime URL placeholder.');
+		const url = new URL(runtime.DATABASE_URL);
+		expect(url.hostname.toLowerCase()).toBe('development_pooler_host');
+		expect(url.pathname).toBe('/NEON_DATABASE');
+		expect(url.username).toBe('NEON_USER');
+		expect(url.searchParams.get('sslmode')).toBe('require');
+	});
+
+	it('keeps unsupported legacy operator and live-test profiles disabled without target credentials', async () => {
+		for (const file of ['.env.bootstrap.local.example', '.env.bootstrap-test.local.example']) {
+			const profile = parseEnv(await readRootFile(file));
+			expect(profile.PLATFORM_OWNER_BOOTSTRAP_ENABLED).toBe('false');
+			expect(profile.DATABASE_URL).toBeUndefined();
+			expect(profile.BOOTSTRAP_TEST_DATABASE_URL).toBeUndefined();
+			expect(profile.PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE).toBeUndefined();
 		}
-		expect(operator.PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_NAME).toBe('gym_dev');
+		const tests = parseEnv(await readRootFile('.env.bootstrap-test.local.example'));
+		expect(tests.NODE_ENV).toBe('test');
+		expect(tests.BOOTSTRAP_POSTGRES_TESTS).toBe('0');
 	});
 
 	it('routes bootstrap startup failures to the CLI handler without enabling raw logs', async () => {
@@ -30,7 +34,6 @@ describe('API workflow environment boundaries', () => {
 		const options = /createApplicationContext\(PlatformBootstrapCliModule,\s*\{([^}]*)\}/u.exec(
 			cli,
 		);
-
 		expect(options?.[1]).toContain('logger: false');
 		expect(options?.[1]).toContain('abortOnError: false');
 	});
@@ -43,27 +46,5 @@ describe('API workflow environment boundaries', () => {
 			expect(runtime.BOOTSTRAP_TEST_DATABASE_MARKER).toBeUndefined();
 			expect(runtime.PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE).toBeUndefined();
 		}
-	});
-
-	it('requires separate operator and disposable test configuration', async () => {
-		const operator = parseEnv(await readRootFile('.env.bootstrap.local.example'));
-		const tests = parseEnv(await readRootFile('.env.bootstrap-test.local.example'));
-		expect(operator.PLATFORM_OWNER_BOOTSTRAP_ENABLED).toBe('false');
-		expect(operator.PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE).toBe('gym_bootstrap');
-		expect(operator.BOOTSTRAP_TEST_DATABASE_URL).toBeUndefined();
-		expect(tests.DATABASE_URL).toBeUndefined();
-		expect(tests.BOOTSTRAP_POSTGRES_TESTS).toBe('1');
-		expect(tests.NODE_ENV).toBe('test');
-		expect(tests.PLATFORM_OWNER_BOOTSTRAP_ENABLED).toBe('false');
-	});
-
-	it('offers an explicit PostgreSQL command without loading the operator profile', async () => {
-		const manifest: unknown = JSON.parse(await readRootFile('package.json'));
-		expect(manifest).toMatchObject({
-			scripts: {
-				'test:bootstrap:postgres':
-					'node --env-file=.env.local --env-file=.env.bootstrap-test.local --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects integration --runInBand --testPathPattern=platform-bootstrap-postgres',
-			},
-		});
 	});
 });
