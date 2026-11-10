@@ -1,25 +1,69 @@
-import { ArgumentsHost, Catch, HttpException, Logger, type ExceptionFilter } from '@nestjs/common';
+import {
+	type ArgumentsHost,
+	Catch,
+	HttpException,
+	Logger,
+	type ExceptionFilter,
+} from '@nestjs/common';
 import type { Response } from 'express';
 
+import { REQUEST_ID_HEADER } from '../constants/api.constants.js';
+import {
+	PROBLEM_CATALOG,
+	defaultErrorCode,
+	isApiErrorCode,
+	type ApiErrorCode,
+} from '../errors/api-error-code.js';
+import { ApiProblemException } from '../errors/api-problem.exception.js';
 import {
 	databaseErrorCode,
 	databaseSqlState,
 	databaseTransactionFailure,
 } from '../errors/database-error-code.js';
+import { requestObservation } from '../logging/request-observation.js';
 import type { RequestWithContext } from '../types/request-with-context.js';
-
-const STATUS_CODES: Readonly<Record<number, string>> = {
-	400: 'BAD_REQUEST',
-	401: 'UNAUTHENTICATED',
-	403: 'FORBIDDEN',
-	404: 'NOT_FOUND',
-	409: 'CONFLICT',
-	429: 'RATE_LIMITED',
-};
-const INTERNAL_SERVER_ERROR_STATUS = 500;
+import type { ApiErrorResponseDto } from '../dto/api-error-response.dto.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Status selection never requires a database query and never returns a provider's public text. */
+function exceptionStatus(exception: unknown): number {
+	if (exception instanceof HttpException) {
+		const status = exception.getStatus();
+		return Number.isInteger(status) && status >= 400 && status <= 599 ? status : 500;
+	}
+	if (isRecord(exception)) {
+		if (
+			typeof exception.type === 'string' &&
+			['entity.parse.failed', 'request.size.invalid', 'request.aborted'].includes(exception.type) &&
+			exception.status === 400
+		)
+			return 400;
+		if (
+			typeof exception.type === 'string' &&
+			['entity.too.large', 'parameters.too.many'].includes(exception.type) &&
+			exception.status === 413
+		)
+			return 413;
+		if (
+			typeof exception.type === 'string' &&
+			['charset.unsupported', 'encoding.unsupported'].includes(exception.type) &&
+			exception.status === 415
+		)
+			return 415;
+	}
+	const code = databaseErrorCode(exception);
+	if (
+		code !== undefined &&
+		['P1001', 'P1002', 'P1008', 'P1017', 'P2024', 'P2028', 'P2034', 'P2037'].includes(code)
+	)
+		return 503;
+	if (code === 'P2002' || code === 'P2003') return 409;
+	if (code === 'P2000' || code === 'P2004') return 400;
+	// A missing row is not globally translated: account/resource disclosure needs domain context.
+	return 500;
 }
 
 @Catch()
@@ -30,45 +74,46 @@ export class ApiExceptionFilter implements ExceptionFilter {
 		const http = host.switchToHttp();
 		const request = http.getRequest<RequestWithContext>();
 		const response = http.getResponse<Response>();
-		const status = exception instanceof HttpException ? exception.getStatus() : 500;
+		if (response.headersSent) return;
+		const status = exceptionStatus(exception);
 		const exceptionBody = exception instanceof HttpException ? exception.getResponse() : undefined;
-		const bodyRecord = isRecord(exceptionBody) ? exceptionBody : undefined;
-		const code =
-			typeof bodyRecord?.code === 'string'
-				? bodyRecord.code
-				: (STATUS_CODES[status] ?? 'INTERNAL_ERROR');
-		const messageValue = bodyRecord?.message;
-		const message =
-			status >= INTERNAL_SERVER_ERROR_STATUS
-				? 'An unexpected error occurred'
-				: typeof exceptionBody === 'string'
-					? exceptionBody
-					: typeof messageValue === 'string'
-						? messageValue
-						: 'Request failed';
-
-		if (status >= INTERNAL_SERVER_ERROR_STATUS) {
-			// Provider stacks and messages may contain SQL or credentials; log correlation metadata only.
+		const proposed = isRecord(exceptionBody) ? exceptionBody.code : undefined;
+		const code: ApiErrorCode =
+			isApiErrorCode(proposed) && PROBLEM_CATALOG[proposed].status === status
+				? proposed
+				: defaultErrorCode(status);
+		const definition = PROBLEM_CATALOG[code];
+		const observation = requestObservation(request);
+		request.problemCode = code;
+		const problem: ApiErrorResponseDto = {
+			type: `urn:akiba:problem:${code.toLowerCase().replaceAll('_', '-')}`,
+			title: definition.title,
+			status,
+			detail: definition.detail,
+			code,
+			requestId: observation.requestId,
+			...(exception instanceof ApiProblemException && exception.fieldErrors.length > 0
+				? { errors: [...exception.fieldErrors] }
+				: {}),
+		};
+		if (status >= 500) {
 			const cause = exception instanceof HttpException ? exception.cause : exception;
-			const databaseCode = databaseErrorCode(cause);
-			const sqlState = databaseSqlState(cause);
-			const transactionFailure = databaseTransactionFailure(cause);
 			this.logger.error(
-				`${request.method} ${request.path} failed requestId=${request.requestId} code=${code}${databaseCode ? ` databaseCode=${databaseCode}` : ''}${sqlState ? ` sqlState=${sqlState}` : ''}${transactionFailure ? ` transactionFailure=${transactionFailure}` : ''}`,
+				JSON.stringify({
+					event: 'request.failed',
+					...observation,
+					status,
+					errorCode: code,
+					diagnostics: {
+						databaseCode: databaseErrorCode(cause),
+						sqlState: databaseSqlState(cause),
+						transactionFailure: databaseTransactionFailure(cause),
+					},
+				}),
 			);
 		}
-
-		// Guard and validation failures occur before controller response headers are applied.
+		response.setHeader(REQUEST_ID_HEADER, observation.requestId);
 		response.setHeader('Cache-Control', 'no-store');
-		response.status(status).json({
-			error: {
-				code,
-				message,
-				requestId: request.requestId,
-				...(Array.isArray(bodyRecord?.details) ? { details: bodyRecord.details } : {}),
-			},
-			timestamp: new Date().toISOString(),
-			path: request.path,
-		});
+		response.status(status).type('application/problem+json').json(problem);
 	}
 }
