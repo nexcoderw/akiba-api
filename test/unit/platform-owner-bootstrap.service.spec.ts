@@ -52,14 +52,10 @@ describe('PlatformOwnerBootstrapService', () => {
 	beforeAll(async () => {
 		const config = new ConfigService<EnvironmentVariables, true>(
 			validateEnvironment({
-				NODE_ENV: 'test',
-				DATABASE_URL: 'postgresql://akiba_bootstrap:secret@approved.neon.tech/neondb',
+				NODE_ENV: 'development',
+				DATABASE_URL:
+					'postgresql://neondb_owner:fictional@development.example.com/neondb?sslmode=require',
 				PLATFORM_OWNER_BOOTSTRAP_ENABLED: 'true',
-				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_HOST: 'approved.neon.tech',
-				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_NAME: 'neondb',
-				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_ROLE: 'akiba_bootstrap',
-				PLATFORM_OWNER_BOOTSTRAP_EXPECTED_DATABASE_MARKER:
-					'akiba:bootstrap:724fbc40-515c-4a30-a4bb-8a6458a24396',
 			}),
 		);
 		const module = await Test.createTestingModule({
@@ -78,18 +74,23 @@ describe('PlatformOwnerBootstrapService', () => {
 		service = module.get(PlatformOwnerBootstrapService);
 	});
 
+	it('identifies the selected runtime database without exposing credentials', () => {
+		expect(service.getTarget()).toEqual({
+			environment: 'development',
+			databaseHost: 'development.example.com',
+			databaseName: 'neondb',
+			databaseRole: 'neondb_owner',
+		});
+	});
+
 	beforeEach(() => {
 		jest.clearAllMocks();
 		queryRaw.mockReset();
 		queryRaw.mockResolvedValueOnce([{ acquired: true }]).mockResolvedValue([
 			{
 				databaseName: 'neondb',
-				databaseRole: 'akiba_bootstrap',
-				sessionRole: 'akiba_bootstrap',
-				databaseMarker: 'akiba:bootstrap:724fbc40-515c-4a30-a4bb-8a6458a24396',
-				unsafeRole: false,
-				canCreate: false,
-				ownsObjects: false,
+				databaseRole: 'neondb_owner',
+				sessionRole: 'neondb_owner',
 			},
 		]);
 		staffCount.mockResolvedValue(0);
