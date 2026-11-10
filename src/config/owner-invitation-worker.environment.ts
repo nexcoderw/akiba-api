@@ -10,18 +10,17 @@ export type OwnerInvitationWorkerEnvironment = Pick<
 	| 'OWNER_INVITATION_DELIVERY'
 	| 'RESEND_API_KEY'
 	| 'RESEND_FROM_EMAIL'
-	| 'DATABASE_URL'
 	| 'DATABASE_POOL_MAX'
 	| 'DATABASE_CONNECTION_TIMEOUT_MS'
->;
+> & { readonly DATABASE_URL: string };
 
-/** The worker does not load HTTP authentication secrets or the API's local environment file. */
+/** Validate the selected runtime connection without requiring HTTP session or TOTP secrets. */
 export function validateOwnerInvitationWorkerEnvironment(
 	input: Record<string, unknown>,
 ): OwnerInvitationWorkerEnvironment {
 	const environment = input.NODE_ENV;
-	if (environment !== 'development' && environment !== 'test' && environment !== 'production') {
-		throw new Error('NODE_ENV must be explicitly set for the invitation worker.');
+	if (environment !== 'development' && environment !== 'production') {
+		throw new Error('NODE_ENV must be development or production for the invitation worker.');
 	}
 	const production = environment === 'production';
 	const portalOriginPolicy = parseOrganizationPortalOriginPolicy(input, production);
@@ -35,18 +34,14 @@ export function validateOwnerInvitationWorkerEnvironment(
 	});
 	const url = new URL(database.databaseUrl);
 	if (
-		['neondb_owner', 'postgres', 'akiba_migrator'].includes(decodeURIComponent(url.username)) ||
 		database.poolMax > 16 ||
 		database.connectionTimeoutMilliseconds < 1000 ||
 		database.connectionTimeoutMilliseconds > 60_000
 	) {
-		throw new Error('The invitation worker requires restricted, bounded database configuration.');
+		throw new Error('The invitation worker requires bounded database configuration.');
 	}
-	if (
-		environment === 'production' &&
-		!['require', 'verify-ca', 'verify-full'].includes(url.searchParams.get('sslmode') ?? '')
-	) {
-		throw new Error('The invitation worker requires production database TLS.');
+	if (!['require', 'verify-ca', 'verify-full'].includes(url.searchParams.get('sslmode') ?? '')) {
+		throw new Error('The invitation worker requires database TLS.');
 	}
 	const apiKey = required(input.RESEND_API_KEY, 'RESEND_API_KEY');
 	const sender = required(input.RESEND_FROM_EMAIL, 'RESEND_FROM_EMAIL');
