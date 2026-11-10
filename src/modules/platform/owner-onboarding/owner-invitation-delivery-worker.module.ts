@@ -17,7 +17,8 @@ import { OwnerInvitationTokenService } from './owner-invitation-token.service.js
 	imports: [
 		ConfigModule.forRoot({
 			isGlobal: true,
-			ignoreEnvFile: true,
+			envFilePath: process.env.NODE_ENV === 'production' ? '.env.production' : '.env.local',
+			ignoreEnvFile: process.env.NODE_ENV === 'test',
 			cache: true,
 			validate: validateOwnerInvitationWorkerEnvironment,
 		}),
