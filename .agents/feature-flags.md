@@ -14,5 +14,5 @@ security invariants.
 
 ## Example and checklist
 
-Soho may receive advanced reports while Power Gym does not; a Soho user still needs
+Kimihurura Supplies may receive advanced reports while Remera Trading does not; a Kimihurura Supplies user still needs
 `reports.finance.read`. Test default, override, expiry, suspension, cache, and audit cases.
