@@ -57,15 +57,16 @@ export class OrganizationAuthorizationService {
 		context: TenantSecurityContext,
 		grants: ReadonlySet<OrganizationPermission>,
 		permission: string,
-		scope: OrganizationResourceScope,
+		scope: unknown,
 	): boolean {
 		this.access.assert(context);
 		if (!isOrganizationPermission(permission)) return false;
+		if (typeof scope !== 'object' || scope === null || !('kind' in scope)) return false;
 		if (scope.kind === 'organization') return grants.has(permission);
-		if (scope.kind === 'branch') {
-			return context.resourceScope.branchIds.includes(scope.branchId) && grants.has(permission);
+		if (scope.kind !== 'branch' || !('branchId' in scope) || typeof scope.branchId !== 'string') {
+			return false;
 		}
-		return false;
+		return context.resourceScope.branchIds.includes(scope.branchId) && grants.has(permission);
 	}
 
 	async effectiveInTransaction(
@@ -92,11 +93,10 @@ export class OrganizationAuthorizationService {
 				},
 			},
 		});
-		const credential = session?.user.passwordCredential;
+		if (session === null) throw new ApiProblemException('UNAUTHENTICATED');
+		const credential = session.user.passwordCredential;
 		if (
-			session === null ||
 			credential === null ||
-			credential === undefined ||
 			credential.disabledAt !== null ||
 			credential.passwordChangedAt > session.authenticatedAt ||
 			session.assurance !== context.assurance
