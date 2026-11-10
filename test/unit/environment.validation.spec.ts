@@ -1,10 +1,37 @@
 import { validateEnvironment } from '../../src/config/environment.validation.js';
 
 describe('validateEnvironment', () => {
+	it('requires a complete, bounded offline password blocklist configuration', () => {
+		expect(() =>
+			validateEnvironment({ NODE_ENV: 'test', PASSWORD_BLOCKLIST_FILE: '/tmp/corpus.sha256' }),
+		).toThrow('together');
+		expect(() =>
+			validateEnvironment({
+				NODE_ENV: 'test',
+				PASSWORD_BLOCKLIST_FILE: 'relative',
+				PASSWORD_BLOCKLIST_SHA256: '0'.repeat(64),
+			}),
+		).toThrow('absolute');
+		expect(() => validateEnvironment({ NODE_ENV: 'test', PASSWORD_BLOCKLIST_FILE: 1 })).toThrow(
+			'strings',
+		);
+		expect(
+			validateEnvironment({
+				NODE_ENV: 'test',
+				PASSWORD_BLOCKLIST_FILE: '/tmp/corpus.sha256',
+				PASSWORD_BLOCKLIST_SHA256: '0'.repeat(64),
+			}),
+		).toMatchObject({
+			PASSWORD_BLOCKLIST_FILE: '/tmp/corpus.sha256',
+			PASSWORD_BLOCKLIST_SHA256: '0'.repeat(64),
+		});
+	});
 	it('returns safe offline test defaults', () => {
 		expect(validateEnvironment({ NODE_ENV: 'test' })).toEqual({
 			NODE_ENV: 'test',
 			API_PUBLIC_ORIGIN: 'http://localhost:3000',
+			PASSWORD_BLOCKLIST_FILE: null,
+			PASSWORD_BLOCKLIST_SHA256: null,
 			HOST: '127.0.0.1',
 			PORT: 3000,
 			BODY_LIMIT_BYTES: 32768,
