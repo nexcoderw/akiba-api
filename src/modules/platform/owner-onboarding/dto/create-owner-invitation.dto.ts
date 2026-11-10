@@ -1,5 +1,9 @@
+import {
+	IsEmailIdentity,
+	transformEmailIdentity,
+} from '../../../../common/identity/email-identity.js';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsString, Matches, MaxLength, MinLength, NotContains } from 'class-validator';
+import { IsString, Matches, MaxLength, MinLength, NotContains } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 const TRIM_PATTERN = /^[\s\u0085]+|[\s\u0085]+$/gu;
@@ -17,12 +21,10 @@ export class CreateOwnerInvitationDto {
 	displayName!: string;
 
 	@ApiProperty({ example: 'aline@example.com', minLength: 3, maxLength: 254 })
-	@Transform(({ value }: { value: unknown }) =>
-		typeof value === 'string' ? value.trim().toLowerCase() : value,
-	)
+	@Transform(({ value }: { value: unknown }) => transformEmailIdentity(value))
 	@IsString()
 	@MinLength(3)
 	@MaxLength(254)
-	@IsEmail({ allow_utf8_local_part: false, require_tld: true })
+	@IsEmailIdentity()
 	email!: string;
 }
