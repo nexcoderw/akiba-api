@@ -82,7 +82,12 @@ export class OwnerAuthController {
 			request.ownerOrganizationSlug,
 		);
 		const csrfToken = this.tokens.create();
-		this.cookies.setSession(response, result.sessionToken, result.expiresAtDate, request.headers.origin ?? '');
+		this.cookies.setSession(
+			response,
+			result.sessionToken,
+			result.expiresAtDate,
+			request.headers.origin ?? '',
+		);
 		this.cookies.setCsrf(response, csrfToken, result.expiresAtDate);
 		return { status: 'authenticated', expiresAt: result.expiresAt, csrfToken };
 	}
