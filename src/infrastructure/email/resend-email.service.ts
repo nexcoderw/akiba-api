@@ -25,7 +25,7 @@ export class ResendEmailService {
 				body: JSON.stringify({
 					from,
 					to: [recipient],
-					subject: 'Your NEXCODE Gym verification code',
+					subject: 'Your Akiba verification code',
 					text: `Your sign-in code is ${code}. It expires within five minutes. Use only the newest code. Do not share it. If you did not request this, ignore this email.`,
 				}),
 			});
