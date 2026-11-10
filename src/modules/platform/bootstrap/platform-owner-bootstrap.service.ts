@@ -1,8 +1,9 @@
-import { randomBytes } from 'node:crypto';
+import { recordIdentityEvent } from '../../identity/identity-security.js';
+import { normalizeEmailIdentity } from '../../../common/identity/email-identity.js';
+import { randomBytes, randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { isEmail } from 'class-validator';
 import { PlatformStaffStatus, Prisma, PrismaService, UserStatus } from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
@@ -61,6 +62,7 @@ export class PlatformOwnerBootstrapService {
 	async initialize(input: InitializePlatformOwnerInput): Promise<PlatformOwnerEnrollment> {
 		this.assertEnabled();
 		const email = normalizeEmail(input.email);
+		const requestId = `req_${randomUUID()}`;
 
 		let passwordHash: string;
 		let displayName: string;
@@ -102,10 +104,10 @@ export class PlatformOwnerBootstrapService {
 							email,
 							displayName,
 							status: UserStatus.PENDING,
-							passwordCredential: { create: { passwordHash } },
+							passwordCredential: { create: { passwordHash, normalization: 'nfc' } },
 							platformStaff: { create: { status: PlatformStaffStatus.PENDING } },
 						},
-						select: { platformStaff: { select: { id: true } } },
+						select: { id: true, identityVersion: true, platformStaff: { select: { id: true } } },
 					});
 					if (identity.platformStaff === null) {
 						throw new PlatformBootstrapError(
@@ -113,6 +115,23 @@ export class PlatformOwnerBootstrapService {
 							'The pending platform staff identity was not created.',
 						);
 					}
+
+					const actor = {
+						actorKind: 'bootstrap' as const,
+						actorPlatformStaffId: identity.platformStaff.id,
+						requestId,
+					};
+					await recordIdentityEvent(transaction, actor, {
+						userId: identity.id,
+						action: 'identity_created',
+						identityVersion: identity.identityVersion,
+					});
+					await recordIdentityEvent(transaction, actor, {
+						userId: identity.id,
+						action: 'password_created',
+						identityVersion: identity.identityVersion,
+						credentialVersion: 1,
+					});
 
 					await transaction.platformStaffRole.create({
 						data: { platformStaffId: identity.platformStaff.id, platformRoleId: roleId },
@@ -165,6 +184,7 @@ export class PlatformOwnerBootstrapService {
 							id: true,
 							status: true,
 							emailVerifiedAt: true,
+							identityVersion: true,
 							platformStaff: {
 								select: {
 									id: true,
@@ -250,6 +270,7 @@ export class PlatformOwnerBootstrapService {
 						data: {
 							status: UserStatus.ACTIVE,
 							emailVerifiedAt: identity.emailVerifiedAt ?? now,
+							identityVersion: { increment: 1 },
 						},
 					});
 					const staffUpdated = await transaction.platformStaff.updateMany({
@@ -268,6 +289,19 @@ export class PlatformOwnerBootstrapService {
 							codeDigest: this.tokens.digest(code),
 						})),
 					});
+					await recordIdentityEvent(
+						transaction,
+						{
+							actorKind: 'bootstrap',
+							actorPlatformStaffId: staff.id,
+							requestId: `req_${randomUUID()}`,
+						},
+						{
+							userId: identity.id,
+							action: 'email_verified',
+							identityVersion: identity.identityVersion + 1,
+						},
+					);
 					return { recoveryCodes };
 				},
 				transactionOptions,
@@ -391,11 +425,13 @@ function createRecoveryCodes(): string[] {
 }
 
 function normalizeEmail(email: string): string {
-	return email.trim().toLowerCase();
+	const normalized = normalizeEmailIdentity(email);
+	if (normalized === null) throw invalidInput('Enter a supported email address.');
+	return normalized;
 }
 
 function validateEmail(email: string): void {
-	if (email.length > 254 || !isEmail(email, { allow_utf8_local_part: false })) {
+	if (normalizeEmailIdentity(email) === null) {
 		throw invalidInput('Enter a valid email address of at most 254 characters.');
 	}
 }
@@ -425,7 +461,7 @@ function containsControlCharacter(value: string): boolean {
 function validatePassword(password: Buffer, email: string): void {
 	if (!acceptsBootstrapPassword(password, email)) {
 		throw invalidInput(
-			'Use 12 to 1024 characters within 1024 UTF-8 bytes, without controls or your email address.',
+			'Use 15 to 1024 characters within 4096 UTF-8 bytes, without controls or a blocked password.',
 		);
 	}
 }
