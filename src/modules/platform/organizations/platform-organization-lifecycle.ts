@@ -1,5 +1,5 @@
 import { ConflictException } from '@nestjs/common';
-import { OrganizationStatus } from '@nexcoderw/gym-db';
+import { OrganizationStatus } from '@nexcoderw/akiba-db';
 
 export type OrganizationLifecycleAction = 'activation' | 'suspension' | 'archival';
 
