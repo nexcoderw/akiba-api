@@ -1,34 +1,39 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+import type { ApiErrorCode } from '../errors/api-error-code.js';
+import type { FieldErrorCode } from '../errors/validation-issue.js';
+
 export class ApiErrorDetailDto {
-	@ApiProperty({ example: 'email' })
+	@ApiProperty({ example: 'profile.email' })
 	field!: string;
 
-	@ApiProperty({ example: 'email must be an email' })
+	@ApiProperty({ example: 'INVALID_EMAIL' })
+	code!: FieldErrorCode;
+
+	@ApiProperty({ example: 'Enter a valid email address.' })
 	message!: string;
 }
 
-export class ApiErrorDto {
+/** RFC 9457 response. No request paths, rejected values or implementation details are serialized. */
+export class ApiErrorResponseDto {
+	@ApiProperty({ example: 'urn:akiba:problem:validation-failed' })
+	type!: string;
+
+	@ApiProperty({ example: 'Please check your information' })
+	title!: string;
+
+	@ApiProperty({ example: 400, minimum: 400, maximum: 599 })
+	status!: number;
+
+	@ApiProperty({ example: 'Some fields need to be corrected.' })
+	detail!: string;
+
 	@ApiProperty({ example: 'VALIDATION_FAILED' })
-	code!: string;
+	code!: ApiErrorCode;
 
-	@ApiProperty({ example: 'Request validation failed' })
-	message!: string;
-
-	@ApiProperty({ example: '9a14de53-a456-4b8d-9676-106cc5caa2ad' })
+	@ApiProperty({ example: 'req_9a14de53-a456-4b8d-9676-106cc5caa2ad' })
 	requestId!: string;
 
-	@ApiPropertyOptional({ type: [ApiErrorDetailDto] })
-	details?: ApiErrorDetailDto[];
-}
-
-export class ApiErrorResponseDto {
-	@ApiProperty({ type: ApiErrorDto })
-	error!: ApiErrorDto;
-
-	@ApiProperty({ example: '2026-10-12T10:30:00.000Z' })
-	timestamp!: string;
-
-	@ApiProperty({ example: '/api/v1/organizations' })
-	path!: string;
+	@ApiPropertyOptional({ type: [ApiErrorDetailDto], maxItems: 20 })
+	errors?: ApiErrorDetailDto[];
 }
