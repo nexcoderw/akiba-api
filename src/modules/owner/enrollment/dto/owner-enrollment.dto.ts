@@ -2,10 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsString, Matches, MaxLength, MinLength, NotContains } from 'class-validator';
 
-import {
-	MAXIMUM_PASSWORD_CHARACTERS,
-	MINIMUM_PASSWORD_CHARACTERS,
-} from '../../../platform/auth/platform-password-policy.js';
+import { MAXIMUM_BOOTSTRAP_PASSWORD_BYTES } from '../../../platform/auth/platform-password-policy.js';
 
 const OPAQUE_TOKEN = /^[A-Za-z0-9_-]{43}$/u;
 const TRIM_PATTERN = /^[\s\u0085]+|[\s\u0085]+$/gu;
@@ -23,10 +20,10 @@ export class VerifyExistingOwnerDto {
 	@Matches(OPAQUE_TOKEN)
 	challengeToken!: string;
 
-	@ApiProperty({ minLength: MINIMUM_PASSWORD_CHARACTERS, maxLength: MAXIMUM_PASSWORD_CHARACTERS })
+	@ApiProperty({ minLength: 1, writeOnly: true, maxLength: MAXIMUM_BOOTSTRAP_PASSWORD_BYTES })
 	@IsString()
-	@MinLength(MINIMUM_PASSWORD_CHARACTERS)
-	@MaxLength(MAXIMUM_PASSWORD_CHARACTERS)
+	@MinLength(1)
+	@MaxLength(MAXIMUM_BOOTSTRAP_PASSWORD_BYTES)
 	password!: string;
 }
 
