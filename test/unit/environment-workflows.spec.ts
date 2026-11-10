@@ -24,7 +24,7 @@ describe('API workflow environment boundaries', () => {
 		expect(url.hostname.toLowerCase()).toBe(host);
 		expect(url.pathname).toBe('/NEON_DATABASE');
 		expect(url.username).toBe('NEON_USER');
-		expect(url.searchParams.get('sslmode')).toBe('require');
+		expect(url.searchParams.get('sslmode')).toBe('verify-full');
 		expect(runtime.PLATFORM_OWNER_BOOTSTRAP_ENABLED).toBe('false');
 		expect(
 			Object.keys(runtime)
