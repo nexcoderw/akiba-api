@@ -10,7 +10,7 @@ import type { AcceptedTotp } from './platform-auth.types.js';
 const TOTP_PERIOD_SECONDS = 30;
 const TOTP_SECRET_BYTES = 20;
 const TOTP_ENCRYPTION_VERSION = 1;
-const TOTP_ISSUER = 'NEXCODE Gym';
+const TOTP_ISSUER = 'Akiba';
 
 export interface EncryptedTotpSecret {
 	readonly platformStaffId: string;
