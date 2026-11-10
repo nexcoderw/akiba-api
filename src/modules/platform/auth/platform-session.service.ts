@@ -1,3 +1,4 @@
+import { accountCanAuthenticate } from '../../../common/identity/account-state.policy.js';
 import { randomInt } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -9,7 +10,7 @@ import {
 	UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PlatformStaffStatus, Prisma, PrismaService, UserStatus } from '@nexcoderw/akiba-db';
+import { PlatformStaffStatus, Prisma, PrismaService } from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
 import { databaseErrorCode } from '../../../common/errors/database-error-code.js';
@@ -155,7 +156,7 @@ export class PlatformSessionService {
 										status: true,
 										emailVerifiedAt: true,
 										passwordCredential: {
-											select: { passwordChangedAt: true },
+											select: { passwordChangedAt: true, disabledAt: true },
 										},
 									},
 								},
@@ -191,8 +192,11 @@ export class PlatformSessionService {
 					session.idleExpiresAt <= now ||
 					session.mfaVerifiedAt > now ||
 					session.platformStaff.status !== PlatformStaffStatus.ACTIVE ||
-					session.platformStaff.user.status !== UserStatus.ACTIVE ||
-					session.platformStaff.user.emailVerifiedAt === null ||
+					!accountCanAuthenticate(
+						session.platformStaff.user.status,
+						session.platformStaff.user.emailVerifiedAt,
+					) ||
+					session.platformStaff.user.passwordCredential?.disabledAt !== null ||
 					passwordChangedAt === undefined ||
 					passwordChangedAt > session.createdAt ||
 					permissions.length === 0;
