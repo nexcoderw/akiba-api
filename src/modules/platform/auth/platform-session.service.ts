@@ -3,6 +3,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import {
 	Injectable,
+	ForbiddenException,
 	Logger,
 	ServiceUnavailableException,
 	UnauthorizedException,
@@ -16,6 +17,7 @@ import { PLATFORM_AUTH_ERROR } from './platform-auth.constants.js';
 import type { PlatformPrincipal } from './platform-auth.types.js';
 import { PlatformTokenService } from './platform-token.service.js';
 import { effectivePlatformPermissions } from './platform-permission-policy.js';
+import { PLATFORM_PERMISSION } from './platform-permission.constants.js';
 
 const TRANSACTION_MAX_WAIT_MS = 10_000;
 const TRANSACTION_TIMEOUT_MS = 10_000;
@@ -24,6 +26,7 @@ const AUTHENTICATION_MAX_ATTEMPTS = 3;
 
 @Injectable()
 export class PlatformSessionService {
+	private readonly issued = new WeakMap<PlatformPrincipal, string>();
 	private readonly logger = new Logger(PlatformSessionService.name);
 	private readonly idleLifetimeMilliseconds: number;
 	private readonly transactionMaxWaitMilliseconds: number;
@@ -56,11 +59,16 @@ export class PlatformSessionService {
 			const maxWait = Math.min(this.transactionMaxWaitMilliseconds, remaining - 1_000);
 			const timeout = Math.min(TRANSACTION_TIMEOUT_MS, remaining - maxWait);
 			try {
-				return await this.authenticateTransaction(
+				const principal = await this.authenticateTransaction(
 					tokenDigest,
 					attempt === 0 ? now : new Date(now.getTime() + elapsed),
 					{ maxWait, timeout },
 				);
+				Object.freeze(principal.roles);
+				Object.freeze(principal.permissions);
+				Object.freeze(principal);
+				this.issued.set(principal, tokenDigest);
+				return principal;
 			} catch (error: unknown) {
 				const code = databaseErrorCode(error);
 				// Only a confirmed rollback may be retried. Keep the total below the BFF deadline.
@@ -90,6 +98,29 @@ export class PlatformSessionService {
 			}
 		}
 		throw new ServiceUnavailableException('Session verification is temporarily unavailable.');
+	}
+
+	/** Business entry points recheck live authority; copied principals are not credentials. */
+	async authorize(
+		principal: PlatformPrincipal | undefined,
+		permission: string,
+		actorPlatformStaffId?: string,
+	): Promise<void> {
+		const digest = principal === undefined ? undefined : this.issued.get(principal);
+		if (
+			principal === undefined || digest === undefined ||
+			!Object.values(PLATFORM_PERMISSION).some((value) => value === permission) ||
+			(actorPlatformStaffId !== undefined && actorPlatformStaffId !== principal.platformStaffId)
+		) throw new ForbiddenException({ code: 'ACCESS_DENIED', message: 'Access is denied.' });
+		const current = await this.authenticateTransaction(digest, new Date(), {
+			maxWait: this.transactionMaxWaitMilliseconds,
+			timeout: TRANSACTION_TIMEOUT_MS,
+		});
+		if (
+			current.sessionId !== principal.sessionId || current.userId !== principal.userId ||
+			current.platformStaffId !== principal.platformStaffId ||
+			!current.permissions.includes(permission)
+		) throw new ForbiddenException({ code: 'ACCESS_DENIED', message: 'Access is denied.' });
 	}
 
 	private async authenticateTransaction(
