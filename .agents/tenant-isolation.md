@@ -14,5 +14,5 @@ organization IDs, or unrestricted cross-tenant helpers.
 
 ## Example and checklist
 
-`soho.gym.rw` may select Soho, but only the principal's verified membership grants access. Test tenant
+`kimihurura.akiba.com` may select Kimihurura Supplies, but only the principal's verified membership grants access. Test tenant
 A against tenant B across every storage and asynchronous boundary.
