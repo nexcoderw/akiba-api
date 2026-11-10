@@ -1,5 +1,5 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import { PlatformStaffStatus, PrismaService, UserStatus } from '@nexcoderw/gym-db';
+import { PlatformStaffStatus, PrismaService, UserStatus } from '@nexcoderw/akiba-db';
 
 import { AppModule } from '../../src/app.module.js';
 import { PlatformPermissionGuard } from '../../src/modules/platform/auth/platform-permission.guard.js';
