@@ -1,4 +1,4 @@
-import { Controller, Get, Header, UseGuards } from '@nestjs/common';
+import { Controller, Get, Header, Req, UseGuards } from '@nestjs/common';
 import {
 	ApiCookieAuth,
 	ApiForbiddenResponse,
@@ -10,6 +10,7 @@ import {
 	ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 
+import { AccessBoundary } from '../../../common/security/route-access.decorator.js';
 import { ApiErrorResponseDto } from '../../../common/dto/api-error-response.dto.js';
 import { PlatformOriginCsrfGuard } from '../auth/platform-origin-csrf.guard.js';
 import { PlatformPermissionGuard } from '../auth/platform-permission.guard.js';
@@ -17,11 +18,13 @@ import { RequirePlatformPermissions } from '../auth/platform-permissions.decorat
 import { PlatformSessionGuard } from '../auth/platform-session.guard.js';
 import { PLATFORM_PERMISSION } from '../auth/platform-permission.constants.js';
 import { PlatformDashboardSummaryDto } from './dto/platform-dashboard-summary.dto.js';
+import type { PlatformRequest } from '../auth/platform-request.js';
 import { PlatformDashboardService } from './platform-dashboard.service.js';
 
 @ApiTags('Platform dashboard')
 @ApiCookieAuth('platform-session')
 @UseGuards(PlatformOriginCsrfGuard, PlatformSessionGuard, PlatformPermissionGuard)
+@AccessBoundary('platform')
 @Controller('platform/dashboard')
 export class PlatformDashboardController {
 	constructor(private readonly dashboard: PlatformDashboardService) {}
@@ -65,7 +68,7 @@ export class PlatformDashboardController {
 		description: 'A safe internal error; no database details or stack traces are returned.',
 		type: ApiErrorResponseDto,
 	})
-	async getSummary(): Promise<PlatformDashboardSummaryDto> {
-		return await this.dashboard.getSummary();
+	async getSummary(@Req() request: Pick<PlatformRequest, 'platformPrincipal'>): Promise<PlatformDashboardSummaryDto> {
+		return await this.dashboard.getSummary(request.platformPrincipal);
 	}
 }
