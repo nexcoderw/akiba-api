@@ -7,7 +7,7 @@ import {
 	Prisma,
 	PrismaService,
 	UserStatus,
-} from '@nexcoderw/gym-db';
+} from '@nexcoderw/akiba-db';
 
 import type { OwnerPrincipal } from '../auth/owner-auth.types.js';
 import { OwnerTokenService } from '../auth/owner-token.service.js';
