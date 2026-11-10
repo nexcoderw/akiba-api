@@ -10,6 +10,7 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
+import { AccessBoundary } from '../../../common/security/route-access.decorator.js';
 import { ApiErrorResponseDto } from '../../../common/dto/api-error-response.dto.js';
 import {
 	OwnerInvitationPreviewDto,
@@ -22,6 +23,7 @@ import { OwnerInvitationDeliveryService } from './owner-invitation-delivery.serv
 export class OwnerInvitationPreviewController {
 	constructor(private readonly delivery: OwnerInvitationDeliveryService) {}
 
+	@AccessBoundary('public')
 	@Post('preview')
 	@HttpCode(200)
 	@Header('Cache-Control', 'no-store')
