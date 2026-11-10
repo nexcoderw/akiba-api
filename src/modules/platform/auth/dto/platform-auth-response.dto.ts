@@ -40,7 +40,7 @@ export class PlatformSessionResponseDto {
 	@ApiProperty({ example: '2f5298af-cf42-4e66-8968-a42be74cb34b' })
 	userId!: string;
 
-	@ApiProperty({ example: 'NEXCODE Administrator' })
+	@ApiProperty({ example: 'Akiba Administrator' })
 	displayName!: string;
 
 	@ApiProperty({ example: 'admin@example.com' })
