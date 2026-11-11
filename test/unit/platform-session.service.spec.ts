@@ -12,7 +12,9 @@ import { PLATFORM_PERMISSION } from '../../src/modules/platform/auth/platform-pe
 describe('PlatformSessionService', () => {
 	const sessionFindUnique = jest.fn<() => Promise<unknown>>();
 	const sessionUpdateMany = jest.fn<() => Promise<{ count: number }>>();
+	const auditCreate = jest.fn<(input: unknown) => Promise<unknown>>();
 	const transaction = {
+		identitySecurityAuditEvent: { create: auditCreate },
 		platformAdminSession: {
 			findUnique: sessionFindUnique,
 			updateMany: sessionUpdateMany,
@@ -51,6 +53,7 @@ describe('PlatformSessionService', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		sessionUpdateMany.mockResolvedValue({ count: 1 });
+		auditCreate.mockResolvedValue({ id: 'audit-id' });
 	});
 
 	it('scopes selected remote revocation to the authenticated platform staff identity', async () => {
@@ -292,6 +295,25 @@ describe('PlatformSessionService', () => {
 			data: { revokedAt: new Date('2030-01-01T00:10:00.000Z'), revocationReason: 'invalidated' },
 		});
 	});
+
+	it('audits one actual logout when conditional revocation races', async () => {
+		sessionFindUnique.mockResolvedValue(createSession([], 'platform.owner', true));
+		sessionUpdateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+		const token = 'fictional-session-token-with-more-than-32-characters';
+		await Promise.all([service.revoke(token), service.revoke(token)]);
+		expect(auditCreate).toHaveBeenCalledTimes(1);
+		expect(auditCreate.mock.calls[0]?.[0]).toMatchObject({
+			data: { userId: 'user-id', actorKind: 'authentication', action: 'platform_session_revoked' },
+		});
+	});
+
+	it('does not report logout success if the transactional audit fails', async () => {
+		sessionFindUnique.mockResolvedValue(createSession([], 'platform.owner', true));
+		auditCreate.mockRejectedValueOnce(new Error('synthetic audit failure'));
+		await expect(
+			service.revoke('fictional-session-token-with-more-than-32-characters'),
+		).rejects.toMatchObject({ status: 503, response: { code: 'PLATFORM_SESSION_UNAVAILABLE' } });
+	});
 });
 
 function createSession(
@@ -311,6 +333,7 @@ function createSession(
 			status: PlatformStaffStatus.ACTIVE,
 			user: {
 				id: 'user-id',
+				identityVersion: 1,
 				email: 'admin@example.com',
 				displayName: 'Akiba Administrator',
 				status: UserStatus.ACTIVE,
