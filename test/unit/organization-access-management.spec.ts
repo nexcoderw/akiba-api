@@ -39,6 +39,7 @@ describe('internal organization access management', () => {
 		},
 		organizationRole: { create: roleCreate },
 		organizationRolePermission: { createMany: permissionCreate },
+		ownerSession: { updateMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }) },
 		organizationMembership: { findFirst: jest.fn<(args: unknown) => Promise<unknown>>() },
 		organizationAuthorizationAuditEvent: { create: auditCreate },
 	};
