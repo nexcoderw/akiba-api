@@ -93,11 +93,11 @@ export async function revokeIdentityAuthentication(
 ): Promise<void> {
 	await transaction.ownerSession.updateMany({
 		where: { userId, revokedAt: null },
-		data: { revokedAt: now },
+		data: { revokedAt: now, revocationReason: 'credential_change' },
 	});
 	await transaction.platformAdminSession.updateMany({
 		where: { platformStaff: { userId }, revokedAt: null },
-		data: { revokedAt: now },
+		data: { revokedAt: now, revocationReason: 'credential_change' },
 	});
 	await transaction.platformMfaChallenge.updateMany({
 		where: { platformStaff: { userId }, consumedAt: null },
