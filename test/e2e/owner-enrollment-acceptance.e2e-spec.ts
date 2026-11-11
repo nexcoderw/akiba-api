@@ -102,6 +102,7 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 			email: 'aline@example.com',
 			assurance: 'AAL1',
 			expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+			enrollmentChallengeId: '55555555-5555-4555-8555-555555555555',
 			organizations: [],
 		});
 		accept.mockImplementation((_principal, _token, _requestId, _now, organizationSlug) => {
@@ -145,6 +146,23 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 			'kimihurura',
 		);
 		expect(response.get('X-Request-Id')).toMatch(/^req_[0-9a-f-]{36}$/u);
+		expect(response.get('Set-Cookie')).toEqual(
+			expect.arrayContaining([expect.stringContaining(`${OWNER_SESSION_COOKIE}=`)]),
+		);
+	});
+
+	it('rejects a full membership session at the pre-membership acceptance boundary', async () => {
+		authenticate.mockResolvedValueOnce({
+			sessionId: '33333333-3333-4333-8333-333333333333',
+			userId: '44444444-4444-4444-8444-444444444444',
+			displayName: 'Aline Uwase',
+			email: 'aline@example.com',
+			assurance: 'AAL1',
+			expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+			organizations: [],
+		});
+		await acceptanceRequest().expect(401);
+		expect(accept).not.toHaveBeenCalled();
 	});
 
 	it('rejects an unauthenticated acceptance request', async () => {
