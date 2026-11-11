@@ -25,8 +25,11 @@ export function isPlatformSuperadmin(roles: readonly RoleIdentity[]): boolean {
 
 /** Owner-role membership grants the complete declared platform catalog, not a wildcard guard bypass. */
 export function effectivePlatformPermissions(roles: readonly RoleWithPermissions[]): string[] {
+	const catalog = new Set<string>(Object.values(PLATFORM_PERMISSION));
 	const explicit = roles.flatMap(({ platformRole }) =>
-		platformRole.permissions.map(({ platformPermission }) => platformPermission.key),
+		platformRole.permissions
+			.map(({ platformPermission }) => platformPermission.key)
+			.filter((key) => catalog.has(key)),
 	);
 	return [
 		...new Set([
