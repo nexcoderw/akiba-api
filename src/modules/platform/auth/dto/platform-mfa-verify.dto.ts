@@ -4,16 +4,6 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { PlatformMfaMethod } from '../platform-auth.types.js';
 
 export class PlatformMfaVerifyDto {
-	@ApiProperty({
-		description: 'One-time opaque challenge returned by the password step.',
-		example: 'fictional-one-time-challenge-token',
-		maxLength: 256,
-	})
-	@IsString()
-	@MinLength(32)
-	@MaxLength(256)
-	challengeToken!: string;
-
 	@ApiProperty({ enum: ['email_otp', 'totp', 'recovery_code'], example: 'totp' })
 	@IsIn(['email_otp', 'totp', 'recovery_code'])
 	method!: PlatformMfaMethod;
