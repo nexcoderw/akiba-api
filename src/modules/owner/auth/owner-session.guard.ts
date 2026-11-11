@@ -21,6 +21,8 @@ export class OwnerSessionGuard implements CanActivate {
 			throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidSession);
 		}
 		const principal = await this.sessions.authenticate(token);
+		if (principal.enrollmentChallengeId !== undefined)
+			throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidSession);
 		const organizationSlug = request.ownerOrganizationSlug;
 		if (organizationSlug === undefined) {
 			request.ownerPrincipal = principal;
