@@ -53,6 +53,30 @@ describe('PlatformSessionService', () => {
 		sessionUpdateMany.mockResolvedValue({ count: 1 });
 	});
 
+	it('scopes selected remote revocation to the authenticated platform staff identity', async () => {
+		const selectedId = '11111111-1111-4111-8111-111111111111';
+		const now = new Date('2030-01-01T00:10:00.000Z');
+		const authenticate = jest.spyOn(service, 'authenticate').mockResolvedValue({
+			sessionId: 'session-id',
+			userId: 'user-id',
+			platformStaffId: 'staff-id',
+			displayName: 'Fictional Staff',
+			email: 'staff@example.test',
+			expiresAt: new Date('2030-01-01T08:00:00.000Z'),
+			roles: [],
+			permissions: [],
+		});
+		try {
+			await expect(service.revokeSelected('opaque-token', selectedId, now)).resolves.toBe(true);
+			expect(sessionUpdateMany).toHaveBeenCalledWith({
+				where: { id: selectedId, platformStaffId: 'staff-id', revokedAt: null },
+				data: { revokedAt: now, revocationReason: 'remote' },
+			});
+		} finally {
+			authenticate.mockRestore();
+		}
+	});
+
 	it('returns current database roles and permissions and advances idle expiry', async () => {
 		sessionFindUnique.mockResolvedValue(
 			createSession([{ platformPermission: { key: 'platform.dashboard.read' } }]),
@@ -235,7 +259,7 @@ describe('PlatformSessionService', () => {
 			expect(runTransaction).toHaveBeenCalledTimes(2);
 			expect(sessionUpdateMany).toHaveBeenCalledWith({
 				where: { id: 'session-id', revokedAt: null },
-				data: { revokedAt: new Date('2030-01-01T00:30:09.900Z') },
+				data: { revokedAt: new Date('2030-01-01T00:30:09.900Z'), revocationReason: 'expired' },
 			});
 		} finally {
 			clock.mockRestore();
@@ -265,7 +289,7 @@ describe('PlatformSessionService', () => {
 		).rejects.toMatchObject({ status: 401 });
 		expect(sessionUpdateMany).toHaveBeenCalledWith({
 			where: { id: 'session-id', revokedAt: null },
-			data: { revokedAt: new Date('2030-01-01T00:10:00.000Z') },
+			data: { revokedAt: new Date('2030-01-01T00:10:00.000Z'), revocationReason: 'invalidated' },
 		});
 	});
 });
