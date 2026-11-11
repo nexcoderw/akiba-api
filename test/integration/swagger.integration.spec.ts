@@ -40,7 +40,27 @@ describe('OpenAPI integration', () => {
 		expect(document.paths['/platform/auth/login']?.post?.responses['200']).toBeDefined();
 		expect(document.paths['/platform/auth/mfa/verify']?.post?.responses['200']).toBeDefined();
 		expect(document.paths['/platform/auth/session']?.get?.responses['401']).toBeDefined();
+		expect(document.paths['/platform/auth/me']?.get?.security).toEqual([
+			{ 'platform-session': [] },
+		]);
+		expect(document.paths['/platform/auth/mfa/verify']?.post?.security).toEqual([
+			{ 'platform-challenge': [] },
+		]);
 		expect(document.paths['/platform/auth/logout']?.post?.responses['204']).toBeDefined();
+	});
+
+	it('keeps bearer challenges out of public request and response schemas', () => {
+		const document = createOpenApiDocument(application);
+		for (const name of ['PlatformMfaChallengeResponseDto', 'PlatformMfaVerifyDto']) {
+			const schema = document.components?.schemas?.[name];
+			if (schema === undefined || !('properties' in schema))
+				throw new Error('Expected the platform authentication schema.');
+			expect(schema.properties).not.toHaveProperty('challengeToken');
+		}
+		expect(document.components?.securitySchemes?.['platform-challenge']).toMatchObject({
+			in: 'cookie',
+			name: '__Host-akiba-platform-challenge',
+		});
 	});
 
 	it('documents error media/schema/headers and excludes retired commercial routes', () => {
