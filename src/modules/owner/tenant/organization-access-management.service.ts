@@ -301,6 +301,14 @@ export class OrganizationAccessManagementService {
 						organizationPermissionId: permission.id,
 					})),
 				});
+			await transaction.ownerSession.updateMany({
+				where: {
+					organizationId: context.organizationId,
+					membership: { roles: { some: { organizationRoleId: role.id } } },
+					revokedAt: null,
+				},
+				data: { revokedAt: new Date(), revocationReason: 'membership_change' },
+			});
 			await this.audit(transaction, context, 'role_permissions_changed', undefined, role.id);
 		});
 	}
@@ -340,6 +348,14 @@ export class OrganizationAccessManagementService {
 				data: { isActive: false, authorizationVersion: { increment: 1 } },
 			});
 			if (updated.count !== 1) throw new ApiProblemException('PRECONDITION_FAILED');
+			await transaction.ownerSession.updateMany({
+				where: {
+					organizationId: context.organizationId,
+					membership: { roles: { some: { organizationRoleId: role.id } } },
+					revokedAt: null,
+				},
+				data: { revokedAt: new Date(), revocationReason: 'membership_change' },
+			});
 			await this.audit(transaction, context, 'role_disabled', undefined, role.id);
 		});
 	}
@@ -428,6 +444,14 @@ export class OrganizationAccessManagementService {
 						},
 					},
 				});
+			await transaction.ownerSession.updateMany({
+				where: {
+					organizationId: context.organizationId,
+					membershipId: membership.id,
+					revokedAt: null,
+				},
+				data: { revokedAt: new Date(), revocationReason: 'membership_change' },
+			});
 			await this.audit(
 				transaction,
 				context,
@@ -528,6 +552,14 @@ export class OrganizationAccessManagementService {
 				},
 			});
 			if (updated.count !== 1) throw new ApiProblemException('PRECONDITION_FAILED');
+			await transaction.ownerSession.updateMany({
+				where: {
+					organizationId: context.organizationId,
+					membershipId: target.id,
+					revokedAt: null,
+				},
+				data: { revokedAt: now, revocationReason: 'membership_change' },
+			});
 			const action: AuditAction =
 				input.status === OrganizationMembershipStatus.ACTIVE
 					? 'membership_reactivated'
