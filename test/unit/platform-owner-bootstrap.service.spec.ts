@@ -18,7 +18,7 @@ describe('PlatformOwnerBootstrapService', () => {
 	const permissionCreate = jest.fn<() => Promise<unknown>>();
 	const rolePermissionUpsert = jest.fn<() => Promise<unknown>>();
 	const staffRoleCreate = jest.fn<() => Promise<unknown>>();
-	const identityAuditCreate = jest.fn<() => Promise<unknown>>();
+	const identityAuditCreate = jest.fn<(input: unknown) => Promise<unknown>>();
 	const transaction = {
 		$queryRaw: queryRaw,
 		platformStaff: { count: staffCount },
@@ -55,9 +55,11 @@ describe('PlatformOwnerBootstrapService', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		queryRaw.mockReset();
-		queryRaw.mockResolvedValueOnce([{ acquired: true }]).mockResolvedValue([
-			{ databaseName: 'neondb', databaseRole: 'neondb_owner', sessionRole: 'neondb_owner' },
-		]);
+		queryRaw
+			.mockResolvedValueOnce([{ acquired: true }])
+			.mockResolvedValue([
+				{ databaseName: 'neondb', databaseRole: 'neondb_owner', sessionRole: 'neondb_owner' },
+			]);
 		staffCount.mockResolvedValue(0);
 		userFindUnique.mockResolvedValue(null);
 		roleFindUnique.mockResolvedValue(null);
@@ -99,13 +101,14 @@ describe('PlatformOwnerBootstrapService', () => {
 		expect(staffRoleCreate).toHaveBeenCalledWith({
 			data: { platformStaffId: 'staff-id', platformRoleId: 'owner-role-id' },
 		});
-		expect(identityAuditCreate).toHaveBeenCalledWith({
-			data: expect.objectContaining({
+		expect(identityAuditCreate).toHaveBeenCalledTimes(1);
+		expect(identityAuditCreate.mock.calls[0]?.[0]).toMatchObject({
+			data: {
 				actorKind: 'bootstrap',
 				actorPlatformStaffId: 'staff-id',
 				userId: 'user-id',
 				action: 'identity_created',
-			}),
+			},
 			select: { id: true },
 		});
 	});
@@ -127,9 +130,12 @@ describe('PlatformOwnerBootstrapService', () => {
 	});
 
 	it('rejects a different connected database identity before writes', async () => {
-		queryRaw.mockReset().mockResolvedValueOnce([{ acquired: true }]).mockResolvedValueOnce([
-			{ databaseName: 'other', databaseRole: 'neondb_owner', sessionRole: 'neondb_owner' },
-		]);
+		queryRaw
+			.mockReset()
+			.mockResolvedValueOnce([{ acquired: true }])
+			.mockResolvedValueOnce([
+				{ databaseName: 'other', databaseRole: 'neondb_owner', sessionRole: 'neondb_owner' },
+			]);
 		await expect(
 			service.initialize({ email: 'owner@example.com', displayName: 'Fictional Owner' }),
 		).rejects.toMatchObject({ code: 'BOOTSTRAP_UNSAFE_DATABASE' });
