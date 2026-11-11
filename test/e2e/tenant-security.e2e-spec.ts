@@ -440,6 +440,7 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 	it('does not promote an organization owner to platform administration', async () => {
 		await request(app.getHttpServer())
 			.get('/api/v1/platform/dashboard/summary')
+			.set('Host', 'api.akiba.com')
 			.set('Origin', 'http://localhost:4000')
 			.set('Cookie', `akiba-owner-session=${sealOwnerSession(TOKEN, A_ORIGIN, KEY)}`)
 			.expect(401);
@@ -447,6 +448,7 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 	it('cannot promote an owner credential by renaming its cookie to a platform cookie', async () => {
 		await request(app.getHttpServer())
 			.get('/api/v1/platform/dashboard/summary')
+			.set('Host', 'api.akiba.com')
 			.set('Origin', 'http://localhost:4000')
 			.set('Cookie', `akiba-platform-session=${sealOwnerSession(TOKEN, A_ORIGIN, KEY)}`)
 			.expect(401);
