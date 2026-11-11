@@ -19,6 +19,7 @@ import type { PlatformPrincipal } from './platform-auth.types.js';
 import { PlatformTokenService } from './platform-token.service.js';
 import { effectivePlatformPermissions } from './platform-permission-policy.js';
 import { PLATFORM_PERMISSION } from './platform-permission.constants.js';
+import { recordPlatformAuthentication } from './platform-authentication-audit.js';
 
 const TRANSACTION_MAX_WAIT_MS = 10_000;
 const TRANSACTION_TIMEOUT_MS = 10_000;
@@ -259,17 +260,48 @@ export class PlatformSessionService {
 		return principal;
 	}
 
-	async revoke(token: string | undefined, now = new Date()): Promise<void> {
+	async revoke(token: string | undefined, now = new Date(), requestId?: string): Promise<void> {
 		if (token === undefined || token.length < 32 || token.length > 256) {
 			return;
 		}
-		const revoked = await this.prisma.platformAdminSession.updateMany({
-			where: { tokenDigest: this.tokens.digest(token), revokedAt: null },
-			data: { revokedAt: now, revocationReason: 'logout' },
-		});
-		if (revoked.count === 1) {
-			this.logger.log(JSON.stringify({ event: 'platform_session_revoked' }));
-		}
+		const changed = await this.prisma
+			.$transaction(
+				async (transaction) => {
+					const session = await transaction.platformAdminSession.findUnique({
+						where: { tokenDigest: this.tokens.digest(token) },
+						select: {
+							id: true,
+							revokedAt: true,
+							platformStaff: { select: { user: { select: { id: true, identityVersion: true } } } },
+						},
+					});
+					if (session === null || session.revokedAt !== null) return false;
+					const revoked = await transaction.platformAdminSession.updateMany({
+						where: { id: session.id, revokedAt: null },
+						data: { revokedAt: now, revocationReason: 'logout' },
+					});
+					if (revoked.count === 1) {
+						await recordPlatformAuthentication(
+							transaction,
+							session.platformStaff.user,
+							'platform_session_revoked',
+							requestId,
+						);
+					}
+					return revoked.count === 1;
+				},
+				{ maxWait: this.transactionMaxWaitMilliseconds, timeout: TRANSACTION_TIMEOUT_MS },
+			)
+			.catch((error: unknown) => {
+				throw new ServiceUnavailableException(
+					{
+						code: 'PLATFORM_SESSION_UNAVAILABLE',
+						message: 'Session revocation is temporarily unavailable.',
+					},
+					{ cause: error },
+				);
+			});
+		if (changed) this.logger.log(JSON.stringify({ event: 'platform_session_revoked', requestId }));
 	}
 
 	/** Internal session management; the presented platform token is always revalidated. */
