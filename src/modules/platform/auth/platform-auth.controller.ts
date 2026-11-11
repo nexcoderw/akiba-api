@@ -14,11 +14,11 @@ import {
 import {
 	ApiBadRequestResponse,
 	ApiCookieAuth,
+	ApiHeader,
 	ApiForbiddenResponse,
 	ApiNoContentResponse,
 	ApiOkResponse,
 	ApiOperation,
-	ApiPreconditionFailedResponse,
 	ApiServiceUnavailableResponse,
 	ApiTooManyRequestsResponse,
 	ApiUnauthorizedResponse,
@@ -29,6 +29,7 @@ import type { Response } from 'express';
 
 import { AccessBoundary } from '../../../common/security/route-access.decorator.js';
 import { ApiErrorResponseDto } from '../../../common/dto/api-error-response.dto.js';
+import { ApiProblemException } from '../../../common/errors/api-problem.exception.js';
 import {
 	PlatformMfaChallengeResponseDto,
 	PlatformMfaVerifiedResponseDto,
@@ -37,13 +38,12 @@ import {
 } from './dto/platform-auth-response.dto.js';
 import { PlatformLoginDto } from './dto/platform-login.dto.js';
 import { PlatformMfaVerifyDto } from './dto/platform-mfa-verify.dto.js';
-import { PlatformEmailOtpRequestDto } from './dto/platform-email-otp-request.dto.js';
 import { PlatformEmailOtpService } from './platform-email-otp.service.js';
 import { RequirePlatformCsrf } from './platform-csrf.decorator.js';
-import { PLATFORM_AUTH_ERROR } from './platform-auth.constants.js';
+import { PLATFORM_AUTH_ERROR, PLATFORM_CSRF_HEADER } from './platform-auth.constants.js';
 import { PlatformCookieService } from './platform-cookie.service.js';
 import { PlatformLoginService } from './platform-login.service.js';
-import { PlatformMfaService } from './platform-mfa.service.js';
+import { PlatformMfaRejectedException, PlatformMfaService } from './platform-mfa.service.js';
 import { PlatformOriginCsrfGuard } from './platform-origin-csrf.guard.js';
 import type { PlatformRequest } from './platform-request.js';
 import { PlatformSessionGuard } from './platform-session.guard.js';
@@ -71,7 +71,7 @@ export class PlatformAuthController {
 	@ApiOperation({
 		summary: 'Start platform administrator authentication',
 		description:
-			'Validates an eligible administrator password and creates a short-lived MFA challenge. It never creates an authenticated session.',
+			'Validates an eligible administrator password and sets a short-lived, origin-bound HttpOnly MFA challenge cookie. Returns MFA_REQUIRED and no bearer credential. Never creates an authenticated session.',
 	})
 	@ApiOkResponse({
 		description: 'An MFA challenge was created.',
@@ -81,10 +81,6 @@ export class PlatformAuthController {
 	@ApiUnauthorizedResponse({ description: 'Authentication failed.', type: ApiErrorResponseDto })
 	@ApiForbiddenResponse({
 		description: 'The administrative Origin is not allowed.',
-		type: ApiErrorResponseDto,
-	})
-	@ApiPreconditionFailedResponse({
-		description: 'Confirmed MFA enrollment is required.',
 		type: ApiErrorResponseDto,
 	})
 	@ApiTooManyRequestsResponse({
@@ -102,14 +98,25 @@ export class PlatformAuthController {
 	): Promise<PlatformMfaChallengeResponseDto> {
 		const result = await this.loginService.login(
 			input,
-			request.socket.remoteAddress ?? 'unavailable',
+			request.ip ?? request.socket.remoteAddress ?? 'unavailable',
+			undefined,
+			request.requestId,
 		);
+		this.cookies.setChallenge(response, result.challengeToken, new Date(result.expiresAt));
 		this.cookies.setCsrf(response, result.csrfToken, new Date(result.expiresAt));
-		return result;
+		return {
+			status: result.status,
+			nextStep: result.nextStep,
+			csrfToken: result.csrfToken,
+			expiresAt: result.expiresAt,
+			methods: result.methods,
+		};
 	}
 
 	@AccessBoundary('public')
 	@Post('mfa/email')
+	@ApiCookieAuth('platform-challenge')
+	@ApiHeader({ name: PLATFORM_CSRF_HEADER, required: true, description: 'Current CSRF proof.' })
 	@HttpCode(HttpStatus.OK)
 	@Header('Cache-Control', 'no-store')
 	@Throttle({ default: { limit: 3, ttl: 60_000 } })
@@ -118,7 +125,7 @@ export class PlatformAuthController {
 	@ApiOperation({
 		summary: 'Send an email verification code',
 		description:
-			'Requires a live password challenge and CSRF proof. Opt-in fallback delivered only to the verified account mailbox; never accepts a recipient. Three sends per challenge, sixty-second cooldown, expiry at most five minutes. No session is issued.',
+			'Requires the HttpOnly pending-challenge cookie and CSRF proof. No request body is needed. Opt-in fallback delivered only to the verified account mailbox; never accepts a recipient or bearer challenge. Three sends per challenge, sixty-second cooldown, expiry at most five minutes. No session is issued.',
 	})
 	@ApiOkResponse({ type: PlatformEmailOtpSentResponseDto })
 	@ApiBadRequestResponse({ type: ApiErrorResponseDto, description: 'Invalid challenge input.' })
@@ -139,13 +146,24 @@ export class PlatformAuthController {
 		description: 'Delivery could not be confirmed.',
 	})
 	sendEmailOtp(
-		@Body() input: PlatformEmailOtpRequestDto,
+		@Body() input: unknown,
+		@Req() request: PlatformRequest,
 	): Promise<PlatformEmailOtpSentResponseDto> {
-		return this.emailOtp.send(input.challengeToken);
+		if (
+			input !== undefined &&
+			(typeof input !== 'object' ||
+				input === null ||
+				Array.isArray(input) ||
+				Object.keys(input).length !== 0)
+		)
+			throw new ApiProblemException('VALIDATION_FAILED');
+		return this.emailOtp.send(this.requireChallenge(request));
 	}
 
 	@AccessBoundary('public')
 	@Post('mfa/verify')
+	@ApiCookieAuth('platform-challenge')
+	@ApiHeader({ name: PLATFORM_CSRF_HEADER, required: true, description: 'Current CSRF proof.' })
 	@HttpCode(HttpStatus.OK)
 	@Header('Cache-Control', 'no-store')
 	@Throttle({ default: { limit: 10, ttl: 60_000 } })
@@ -154,7 +172,7 @@ export class PlatformAuthController {
 	@ApiOperation({
 		summary: 'Complete platform administrator MFA',
 		description:
-			'Consumes one MFA challenge and a valid authenticator step, recovery code or enabled email OTP before issuing a host-only HttpOnly session cookie.',
+			'Uses only the HttpOnly pending-challenge cookie and exactly one MFA proof. Atomically consumes the challenge before issuing a fresh host-only HttpOnly session cookie and rotating CSRF. Never accepts a challenge token in JSON.',
 	})
 	@ApiOkResponse({
 		description: 'MFA succeeded and the session cookie was issued.',
@@ -179,17 +197,30 @@ export class PlatformAuthController {
 	})
 	async verifyMfa(
 		@Body() input: PlatformMfaVerifyDto,
+		@Req() request: PlatformRequest,
 		@Res({ passthrough: true }) response: Response,
 	): Promise<PlatformMfaVerifiedResponseDto> {
-		const result = await this.mfaService.verify(input);
+		let result: Awaited<ReturnType<PlatformMfaService['verify']>>;
+		try {
+			result = await this.mfaService.verify(
+				{ ...input, challengeToken: this.requireChallenge(request) },
+				undefined,
+				request.requestId,
+			);
+		} catch (error: unknown) {
+			if (error instanceof PlatformMfaRejectedException && error.terminal)
+				this.cookies.clearChallenge(response);
+			throw error;
+		}
 		const csrfToken = this.tokens.createToken();
+		this.cookies.clearChallenge(response);
 		this.cookies.setSession(response, result.sessionToken, result.expiresAtDate);
 		this.cookies.setCsrf(response, csrfToken, result.expiresAtDate);
 		return { status: result.status, expiresAt: result.expiresAt, csrfToken };
 	}
 
 	@AccessBoundary('platform-session')
-	@Get('session')
+	@Get(['me', 'session'])
 	@Header('Cache-Control', 'no-store')
 	@UseGuards(PlatformOriginCsrfGuard, PlatformSessionGuard)
 	@ApiCookieAuth('platform-session')
@@ -220,6 +251,8 @@ export class PlatformAuthController {
 			throw new UnauthorizedException(PLATFORM_AUTH_ERROR.invalidSession);
 		}
 		return {
+			authenticated: true,
+			mfaVerified: true,
 			userId: principal.userId,
 			displayName: principal.displayName,
 			email: principal.email,
@@ -232,6 +265,7 @@ export class PlatformAuthController {
 
 	@AccessBoundary('public')
 	@Post('logout')
+	@ApiHeader({ name: PLATFORM_CSRF_HEADER, required: true, description: 'Current CSRF proof.' })
 	@HttpCode(HttpStatus.NO_CONTENT)
 	@Header('Cache-Control', 'no-store')
 	@UseGuards(PlatformOriginCsrfGuard)
@@ -240,9 +274,13 @@ export class PlatformAuthController {
 	@ApiOperation({
 		summary: 'End the current platform administrator session',
 		description:
-			'Revokes only the presented session digest and clears the matching host-only session cookie. Repeated requests are safe.',
+			'Revokes the presented platform session and any pending challenge, then clears session, challenge and CSRF cookies. Requires trusted Origin and CSRF. Repeated revocation is safe.',
 	})
 	@ApiNoContentResponse({ description: 'The presented session is revoked or was already absent.' })
+	@ApiServiceUnavailableResponse({
+		description: 'Revocation or its required audit could not be confirmed. Retry logout.',
+		type: ApiErrorResponseDto,
+	})
 	@ApiForbiddenResponse({
 		description: 'Origin or CSRF validation failed.',
 		type: ApiErrorResponseDto,
@@ -255,7 +293,22 @@ export class PlatformAuthController {
 		@Req() request: PlatformRequest,
 		@Res({ passthrough: true }) response: Response,
 	): Promise<void> {
-		await this.sessionService.revoke(this.cookies.readSession(request));
+		await this.sessionService.revoke(
+			this.cookies.readSession(request),
+			undefined,
+			request.requestId,
+		);
+		await this.mfaService.revokeChallenge(
+			this.cookies.readChallenge(request),
+			undefined,
+			request.requestId,
+		);
 		this.cookies.clearSession(response);
+	}
+
+	private requireChallenge(request: PlatformRequest): string {
+		const token = this.cookies.readChallenge(request);
+		if (token === undefined) throw new UnauthorizedException(PLATFORM_AUTH_ERROR.invalidChallenge);
+		return token;
 	}
 }
