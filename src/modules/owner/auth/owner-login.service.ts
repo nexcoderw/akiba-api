@@ -1,4 +1,5 @@
 import { normalizeEmailIdentity } from '../../../common/identity/email-identity.js';
+import { ApiProblemException } from '../../../common/errors/api-problem.exception.js';
 import { accountCanAuthenticate } from '../../../common/identity/account-state.policy.js';
 import {
 	Injectable,
@@ -8,6 +9,7 @@ import {
 } from '@nestjs/common';
 import {
 	OrganizationMembershipStatus,
+	OrganizationStatus,
 	OwnerSessionAssurance,
 	PrismaService,
 } from '@nexcoderw/akiba-db';
@@ -56,17 +58,23 @@ export class OwnerLoginService {
 			input.password,
 			identity?.passwordCredential?.normalization ?? 'raw',
 		);
-		const hasOwnerMembership =
-			identity?.organizationMemberships.some((membership) =>
-				membership.roles.some(({ organizationRole }) => organizationRole.key === 'owner'),
-			) ?? false;
+		const ownerMemberships =
+			identity?.organizationMemberships.filter((membership) =>
+				membership.roles.some(
+					({ organizationRole }) =>
+						organizationRole.key === 'owner' &&
+						organizationRole.isSystem &&
+						organizationRole.isActive,
+				),
+			) ?? [];
+		const membership = ownerMemberships.length === 1 ? ownerMemberships[0] : undefined;
 		if (
 			!passwordValid ||
 			identity === null ||
 			!accountCanAuthenticate(identity.status, identity.emailVerifiedAt) ||
 			identity.passwordCredential?.disabledAt !== null ||
 			identity.platformStaff !== null ||
-			!hasOwnerMembership
+			membership === undefined
 		) {
 			this.attempts.recordFailure(ipAddress, email, now.getTime());
 			this.logger.warn(JSON.stringify({ event: 'owner_login_rejected' }));
@@ -74,7 +82,12 @@ export class OwnerLoginService {
 		}
 
 		try {
-			const session = await this.sessions.create(identity.id, OwnerSessionAssurance.AAL1, now);
+			const session = await this.sessions.create(
+				identity.id,
+				{ organizationId: membership.organizationId, membershipId: membership.id },
+				OwnerSessionAssurance.AAL1,
+				now,
+			);
 			this.attempts.clearAccount(email);
 			this.logger.log(JSON.stringify({ event: 'owner_session_created', userId: identity.id }));
 			return {
@@ -87,6 +100,7 @@ export class OwnerLoginService {
 		} catch (error: unknown) {
 			if (error instanceof UnauthorizedException)
 				throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidCredentials);
+			if (error instanceof ApiProblemException) throw error;
 			throw this.persistenceFailure(error);
 		}
 	}
@@ -105,10 +119,19 @@ export class OwnerLoginService {
 				organizationMemberships: {
 					where: {
 						status: OrganizationMembershipStatus.ACTIVE,
-						organization: organizationSlug === undefined ? undefined : { slug: organizationSlug },
+						organization: {
+							status: OrganizationStatus.ACTIVE,
+							...(organizationSlug === undefined ? {} : { slug: organizationSlug }),
+						},
 					},
 					select: {
-						roles: { select: { organizationRole: { select: { key: true } } } },
+						id: true,
+						organizationId: true,
+						roles: {
+							select: {
+								organizationRole: { select: { key: true, isSystem: true, isActive: true } },
+							},
+						},
 					},
 				},
 			},
