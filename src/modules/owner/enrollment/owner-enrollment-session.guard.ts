@@ -24,7 +24,10 @@ export class OwnerEnrollmentSessionGuard implements CanActivate {
 		if (token === undefined || !this.tokens.isValid(token)) {
 			throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidSession);
 		}
-		request.ownerPrincipal = await this.sessions.authenticate(token);
+		const principal = await this.sessions.authenticate(token);
+		if (principal.enrollmentChallengeId === undefined)
+			throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidSession);
+		request.ownerPrincipal = principal;
 		return true;
 	}
 }
