@@ -202,9 +202,11 @@ export class PlatformSessionService {
 					permissions.length === 0;
 				if (invalid) {
 					if (session.revokedAt === null) {
+						const reason =
+							session.idleExpiresAt <= now || session.expiresAt <= now ? 'expired' : 'invalidated';
 						await transaction.platformAdminSession.updateMany({
 							where: { id: session.id, revokedAt: null },
-							data: { revokedAt: now },
+							data: { revokedAt: now, revocationReason: reason },
 						});
 					}
 					return null;
@@ -263,10 +265,79 @@ export class PlatformSessionService {
 		}
 		const revoked = await this.prisma.platformAdminSession.updateMany({
 			where: { tokenDigest: this.tokens.digest(token), revokedAt: null },
-			data: { revokedAt: now },
+			data: { revokedAt: now, revocationReason: 'logout' },
 		});
 		if (revoked.count === 1) {
 			this.logger.log(JSON.stringify({ event: 'platform_session_revoked' }));
 		}
+	}
+
+	/** Internal session management; the presented platform token is always revalidated. */
+	async listActive(
+		token: string,
+		now = new Date(),
+	): Promise<
+		readonly {
+			readonly id: string;
+			readonly createdAt: Date;
+			readonly lastActivityAt: Date;
+			readonly expiresAt: Date;
+			readonly current: boolean;
+		}[]
+	> {
+		const principal = await this.authenticate(token, now);
+		const rows = await this.prisma.platformAdminSession.findMany({
+			where: {
+				platformStaffId: principal.platformStaffId,
+				revokedAt: null,
+				idleExpiresAt: { gt: now },
+				expiresAt: { gt: now },
+			},
+			select: { id: true, createdAt: true, lastSeenAt: true, expiresAt: true },
+			orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+			take: 20,
+		});
+		return rows.map((row) => ({
+			id: row.id,
+			createdAt: row.createdAt,
+			lastActivityAt: row.lastSeenAt,
+			expiresAt: row.expiresAt,
+			current: row.id === principal.sessionId,
+		}));
+	}
+
+	async revokeSelected(token: string, sessionId: string, now = new Date()): Promise<boolean> {
+		const principal = await this.authenticate(token, now);
+		if (
+			!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(sessionId)
+		)
+			return false;
+		const result = await this.prisma.platformAdminSession.updateMany({
+			where: { id: sessionId, platformStaffId: principal.platformStaffId, revokedAt: null },
+			data: { revokedAt: now, revocationReason: 'remote' },
+		});
+		return result.count === 1;
+	}
+
+	async revokeOther(token: string, now = new Date()): Promise<number> {
+		const principal = await this.authenticate(token, now);
+		const result = await this.prisma.platformAdminSession.updateMany({
+			where: {
+				id: { not: principal.sessionId },
+				platformStaffId: principal.platformStaffId,
+				revokedAt: null,
+			},
+			data: { revokedAt: now, revocationReason: 'all_sessions' },
+		});
+		return result.count;
+	}
+
+	async revokeAll(token: string, now = new Date()): Promise<number> {
+		const principal = await this.authenticate(token, now);
+		const result = await this.prisma.platformAdminSession.updateMany({
+			where: { platformStaffId: principal.platformStaffId, revokedAt: null },
+			data: { revokedAt: now, revocationReason: 'all_sessions' },
+		});
+		return result.count;
 	}
 }
