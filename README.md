@@ -16,10 +16,28 @@ Offline unit, module and HTTP tests replace the database module with fakes. `NOD
 environment file, keeps no database URL and cannot initialize a real database pool. It describes the
 test process, not another database environment.
 
-The existing operator bootstrap uses the selected runtime connection. It stays disabled by default;
-explicit enablement, interactive host/database/user confirmation, live identity checks, transaction
-locking, first-owner checks and MFA activation remain required. Invitation delivery retains its
-separate release approvals and database integrity checks and stays disabled by default.
+The operator-only first-owner command stays disabled by default. Initialization requires an explicit
+`NODE_ENV` and matching command target, interactive host/database/user and email confirmation, a
+live database identity check, and a transaction lock. It reserves one pending global identity and
+platform staff record with the protected owner role, with no password, verified email, MFA factor,
+or session. A pending or disabled staff record still blocks another initialization. Never run this
+command against a live branch without an approved owner and reviewed recovery plan: reservation is
+one-time and currently cannot be completed. Compare the displayed host against the separately
+approved Neon branch registry before confirming; the SQL check verifies the connected database and
+role, but it cannot independently prove Neon branch ownership.
+
+The old activation path trusted an operator-typed mailbox assertion. It is now closed. The
+`bootstrap:platform-owner:activate` command fails with `BOOTSTRAP_ENROLLMENT_UNAVAILABLE` until
+mailbox-proof delivery and consumption, proof-bound password setup, verified MFA enrollment,
+bounded attempts and transactional activation are implemented and tested. Do not mark the pending
+identity active or set `email_verified_at` manually. Future loss of owner access requires a
+separately authorized governance/recovery procedure; it must not reopen initialization. The
+database-managed owner connection and absent RLS policies remain a separate production isolation
+blocker. Invitation delivery retains its separate release approvals and stays disabled by default.
+Any pending owner reserved by the older command may already have a password and an unverified TOTP
+factor; leave it pending for a separately reviewed enrollment repair. Any owner previously
+activated through the old mailbox assertion needs a separate security review; this change does
+not retroactively prove mailbox ownership or revoke an existing session.
 
 ## Human verification
 
