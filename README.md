@@ -84,8 +84,9 @@ continues to use its explicit TenantIdentityRead capability. Future permissioned
 typed RequireOrganizationPermission capability; undeclared tenant handlers still default deny.
 Resource condition builders always retain the trusted organization.
 
-Persistence ownership remains distinct: User/PasswordCredential/OwnerSession are user-global security
-records; PlatformStaff, platform roles/permissions, MFA/sessions and authorization audits are platform
+Persistence ownership remains distinct: User/PasswordCredential are user-global security
+records; OwnerSession is bound to one organization membership or a verified enrollment proof;
+PlatformStaff, platform roles/permissions, MFA/sessions and authorization audits are platform
 security records; Organization is the platform-managed tenant root; memberships, organization roles,
 invitations, deliveries, enrollment and organization/ownership/acceptance audits are scoped associations.
 Composite keys protect cross-organization assignments and role-permission mappings. The organization
@@ -120,6 +121,43 @@ separately approved least-privilege runtime identity and reviewed policies, not 
 roles. In api/db, the human may run npm run security:tenant:audit for read-only development evidence.
 The API CI repository variable AKIBA_DB_SOURCE_REVISION must contain the reviewed DB commit before
 release. CI validates the full commit hash before checkout and never falls back to a branch.
+
+## Step 5 session foundation
+
+Platform and organization sessions use separate opaque 32-byte random tokens and keyed SHA-256
+digests. Cookies are HttpOnly, Secure in production, SameSite Strict, Path `/`, and host-only;
+their CSRF companions are readable for the exact-origin double-submit header. Login and MFA
+transitions issue fresh cookies and CSRF values. The server checks idle and absolute deadlines,
+current account and credential state, and live platform permissions or the bound organization
+membership on each protected request. Activity writes are coalesced. Token lookup uses a unique
+digest index. Tokens, digests and cookies are never returned by session-listing methods.
+
+An owner login creates a session for the single selected active owner membership. A user with
+multiple owner memberships must sign in from a tenant-specific approved portal Origin. Enrollment
+verification instead creates a short-lived provisional session bound to its verified challenge.
+That session can only reach invitation acceptance; acceptance consumes the challenge and clears
+the provisional cookie. The user signs in again to obtain a full membership-bound session.
+The Step 5 migration revokes all prior unbound owner sessions, so existing browsers must also
+sign in again. Apply the reviewed DB migration and regenerate/build `api/db` before running this API.
+
+Internal owner session methods can list at most 20 safe session summaries, revoke a selected or
+other session within the caller's own membership, and atomically replace a full session token.
+Rotation preserves the original absolute deadline and authentication evidence; the old token is
+revoked in the same transaction. Platform internal methods likewise list and revoke only the
+presenting staff identity's sessions. Existing logout endpoints revoke server-side and clear their
+respective cookie pairs. Credential replacement revokes both contexts; organization role and
+membership changes revoke affected organization sessions in the same transaction as the change.
+Unimplemented step-up and new public session-management endpoints remain denied.
+
+The current central API hostname owns the browser cookies. Origin sealing stops a cookie from
+being replayed from a different approved portal, but the browser still stores one host-only cookie
+for the central API. Same-origin `/api/v1` routing on each tenant hostname is needed for browser
+cookie isolation across simultaneous portals. Do not set a parent-domain privileged cookie.
+The in-process throttle and account attempt stores are insufficient across multiple API replicas;
+shared bounded abuse counters and a reviewed failure policy are required before production sign-in.
+No database RLS policy exists and the Neon-managed owner is not an isolation boundary. Session
+events currently have sanitized application logs, not an append-only atomic session audit table;
+add that before treating remote session management as production complete.
 
 ## Global identity and credential foundation
 
