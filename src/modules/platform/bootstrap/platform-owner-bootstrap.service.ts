@@ -48,11 +48,7 @@ export class PlatformOwnerBootstrapService {
 		const email = normalizeEmailIdentity(input.email);
 		if (email === null) throw invalidInput('Enter a supported email address.');
 		const displayName = input.displayName.trim().replace(/\s+/gu, ' ');
-		if (
-			displayName.length < 2 ||
-			displayName.length > 160 ||
-			/[\p{Cc}\p{Cs}]/u.test(displayName)
-		) {
+		if (displayName.length < 2 || displayName.length > 160 || /[\p{Cc}\p{Cs}]/u.test(displayName)) {
 			throw invalidInput('Enter a display name between 2 and 160 safe characters.');
 		}
 		const requestId = `req_${randomUUID()}`;
@@ -110,9 +106,7 @@ export class PlatformOwnerBootstrapService {
 						identityVersion: identity.identityVersion,
 					},
 				);
-			},
-			transactionOptions,
-		);
+			}, transactionOptions);
 		} catch (error: unknown) {
 			throw translateTransactionError(error);
 		}
