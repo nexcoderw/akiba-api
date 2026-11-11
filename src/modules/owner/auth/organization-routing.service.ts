@@ -5,30 +5,15 @@ import type { Request } from 'express';
 import { ApiProblemException } from '../../../common/errors/api-problem.exception.js';
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
 import {
+	localRequestAuthority,
+	requestAuthority,
+} from '../../../common/security/request-authority.js';
+import {
 	isOrganizationPortalOrigin,
 	organizationSlugFromPortalOrigin,
 } from '../../../config/organization-portal-origin.js';
 
-function proxyMatcher(value: unknown): value is (address: string, hop: number) => boolean {
-	return typeof value === 'function';
-}
-
-/** Accept only one canonical authority; URL parsing alone accepts userinfo and path tricks. */
-export function normalizedAuthority(value: unknown): string | null {
-	if (
-		typeof value !== 'string' ||
-		value.length > 260 ||
-		!/^(?:[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?|\[::1\])(?::[0-9]{1,5})?$/iu.test(value)
-	)
-		return null;
-	try {
-		const url = new URL(`https://${value.toLowerCase()}`);
-		if (url.hostname.endsWith('.') || url.hostname.includes('..')) return null;
-		return url.host;
-	} catch {
-		return null;
-	}
-}
+export { normalizedAuthority } from '../../../common/security/request-authority.js';
 
 @Injectable()
 export class OrganizationRoutingService {
@@ -49,26 +34,13 @@ export class OrganizationRoutingService {
 			!isOrganizationPortalOrigin(origin, policy)
 		)
 			throw new ApiProblemException('ORGANIZATION_UNAVAILABLE');
-		let authority = normalizedAuthority(request.headers.host);
-		const trust: unknown = request.app.get('trust proxy fn');
-		if (
-			request.socket.remoteAddress !== undefined &&
-			proxyMatcher(trust) &&
-			trust(request.socket.remoteAddress, 0) &&
-			request.headers['x-forwarded-host'] !== undefined
-		) {
-			authority = normalizedAuthority(request.headers['x-forwarded-host']);
-		}
+		const authority = requestAuthority(request);
 		const api = new URL(this.config.get('API_PUBLIC_ORIGIN', { infer: true }));
 		const portal = new URL(origin);
-		const local =
-			this.config.get('NODE_ENV', { infer: true }) !== 'production' &&
-			['localhost', '127.0.0.1', '[::1]'].includes(api.hostname);
 		const localAuthority =
-			local &&
+			this.config.get('NODE_ENV', { infer: true }) !== 'production' &&
 			authority !== null &&
-			['localhost', '127.0.0.1', '[::1]'].includes(new URL(`https://${authority}`).hostname) &&
-			new URL(`https://${authority}`).port === String(request.socket.localPort);
+			localRequestAuthority(request, authority, api);
 		if (
 			authority === null ||
 			(!localAuthority && authority !== api.host && authority !== portal.host)
