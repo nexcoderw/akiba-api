@@ -50,13 +50,8 @@ describe('OwnerSessionService connection recovery', () => {
 					new Date('2026-01-01T00:00:00.000Z'),
 				);
 			expect(result.token).toBe(token);
-			expect(create).toHaveBeenCalledWith({
-				data: expect.objectContaining({
-					userId,
-					organizationId,
-					membershipId,
-					tokenDigest: 'digest',
-				}),
+			expect(create.mock.calls[0]?.[0]).toMatchObject({
+				data: { userId, organizationId, membershipId, tokenDigest: 'digest' },
 			});
 			expect(JSON.stringify(create.mock.calls)).not.toContain(token);
 		} finally {
@@ -142,7 +137,9 @@ describe('OwnerSessionService connection recovery', () => {
 		const membershipId = '22222222-2222-4222-8222-222222222222';
 		const sessionId = '33333333-3333-4333-8333-333333333333';
 		const selectedId = '44444444-4444-4444-8444-444444444444';
-		const updateMany = jest.fn<() => Promise<{ count: number }>>().mockResolvedValue({ count: 1 });
+		const updateMany = jest
+			.fn<(args: unknown) => Promise<{ count: number }>>()
+			.mockResolvedValue({ count: 1 });
 		const row = {
 			id: sessionId,
 			organizationId,
@@ -204,16 +201,9 @@ describe('OwnerSessionService connection recovery', () => {
 			expect(principal.organizations).toHaveLength(1);
 			expect(principal.organizations[0]?.organizationId).toBe(organizationId);
 			await expect(service.revokeSelected('opaque-token', selectedId, now)).resolves.toBe(true);
-			expect(updateMany).toHaveBeenCalledWith(
-				expect.objectContaining({
-					where: expect.objectContaining({
-						id: selectedId,
-						userId: row.user.id,
-						organizationId,
-						membershipId,
-					}),
-				}),
-			);
+			expect(updateMany.mock.calls[updateMany.mock.calls.length - 1]?.[0]).toMatchObject({
+				where: { id: selectedId, userId: row.user.id, organizationId, membershipId },
+			});
 		} finally {
 			await module.close();
 		}
@@ -240,18 +230,15 @@ describe('OwnerSessionService connection recovery', () => {
 			],
 		}).compile();
 		try {
-			await expect(
-				module
-					.get(OwnerSessionService)
-					.create(
-						'11111111-1111-4111-8111-111111111111',
-						{
-							organizationId: '22222222-2222-4222-8222-222222222222',
-							membershipId: '33333333-3333-4333-8333-333333333333',
-						},
-						OwnerSessionAssurance.AAL1,
-					),
-			).rejects.toMatchObject({ status: 401 });
+			const issue = module.get(OwnerSessionService).create(
+				'11111111-1111-4111-8111-111111111111',
+				{
+					organizationId: '22222222-2222-4222-8222-222222222222',
+					membershipId: '33333333-3333-4333-8333-333333333333',
+				},
+				OwnerSessionAssurance.AAL1,
+			);
+			await expect(issue).rejects.toMatchObject({ status: 401 });
 			expect(create).not.toHaveBeenCalled();
 			expect(queryRaw.mock.calls[0]?.[0]).toEqual(
 				expect.arrayContaining([expect.stringContaining('credential.disabled_at IS NULL')]),
