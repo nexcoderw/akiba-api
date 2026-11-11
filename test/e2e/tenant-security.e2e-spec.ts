@@ -110,8 +110,24 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 
 	function sessionRow(token = TOKEN) {
 		const second = token === TOKEN_B;
+		const organization = organizations.find((item) => item.id === (second ? B : A));
+		if (organization === undefined) throw new Error('Synthetic organization is missing.');
 		return {
 			id: second ? SESSION_B : SESSION,
+			organizationId: organization.id,
+			membershipId: second ? MEMBERSHIP_B : MEMBERSHIP,
+			enrollmentChallengeId: null,
+			enrollmentChallenge: null,
+			membership:
+				membershipStatus === OrganizationMembershipStatus.ACTIVE &&
+				!inactiveMemberships.has(organization.id)
+					? {
+							id: second ? MEMBERSHIP_B : MEMBERSHIP,
+							status: membershipStatus,
+							organization,
+							roles: [{ organizationRole: { key: 'owner' } }],
+						}
+					: null,
 			assurance: 'AAL1',
 			authenticatedAt: new Date('2026-01-01'),
 			idleExpiresAt: new Date('2099-01-01'),
@@ -127,20 +143,6 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 					passwordChangedAt: new Date('2025-01-01'),
 					disabledAt: credentialDisabled ? new Date('2026-01-01') : null,
 				},
-				organizationMemberships:
-					membershipStatus === OrganizationMembershipStatus.ACTIVE
-						? organizations
-								.filter(
-									(org) =>
-										!inactiveMemberships.has(org.id) &&
-										((!second && multiple) || org.id === (second ? B : A)),
-								)
-								.map((organization) => ({
-									id: organization.id === A ? MEMBERSHIP : MEMBERSHIP_B,
-									organization,
-									roles: [{ organizationRole: { key: 'owner' } }],
-								}))
-						: [],
 			},
 		};
 	}
@@ -166,10 +168,18 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 								? sessionRow(TOKEN_B)
 								: null,
 					),
-				findFirst: (args: { where: { id: string } }) =>
-					Promise.resolve(
-						revoked ? null : sessionRow(args.where.id === SESSION_B ? TOKEN_B : TOKEN),
-					),
+				findFirst: (args: {
+					where: { id: string; organizationId?: string; membershipId?: string };
+				}) => {
+					const row = sessionRow(args.where.id === SESSION_B ? TOKEN_B : TOKEN);
+					return Promise.resolve(
+						revoked ||
+							args.where.organizationId !== row.organizationId ||
+							args.where.membershipId !== row.membershipId
+							? null
+							: row,
+					);
+				},
 				updateMany: () => Promise.resolve({ count: 1 }),
 			},
 			organizationMembership: {
@@ -324,10 +334,10 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 		await call(A, A_ORIGIN, A_ORIGIN, TOKEN_B).expect(404);
 		await call(B, B_ORIGIN).expect(404);
 	});
-	it('does not reuse an origin-bound session at a sibling portal even with both memberships', async () => {
+	it('does not reuse an organization-bound session at a sibling portal even with both memberships', async () => {
 		multiple = true;
 		await call(B, B_ORIGIN, A_ORIGIN).expect(401);
-		await call(B, B_ORIGIN).expect(200);
+		await call(B, B_ORIGIN).expect(404);
 	});
 	it('checks the selected membership rather than another active membership', async () => {
 		multiple = true;
