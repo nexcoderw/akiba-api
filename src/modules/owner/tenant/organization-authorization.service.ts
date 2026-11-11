@@ -79,6 +79,9 @@ export class OrganizationAuthorizationService {
 			where: {
 				id: context.sessionId,
 				userId: context.userId,
+				organizationId: context.organizationId,
+				membershipId: context.membershipId,
+				enrollmentChallengeId: null,
 				revokedAt: null,
 				idleExpiresAt: { gt: now },
 				absoluteExpiresAt: { gt: now },
