@@ -1,8 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class PlatformMfaChallengeResponseDto {
-	@ApiProperty({ example: 'fictional-one-time-challenge-token' })
-	challengeToken!: string;
+	@ApiProperty({ enum: ['MFA_REQUIRED'], example: 'MFA_REQUIRED' })
+	status!: 'MFA_REQUIRED';
+
+	@ApiProperty({ enum: ['VERIFY_MFA'], example: 'VERIFY_MFA' })
+	nextStep!: 'VERIFY_MFA';
 
 	@ApiProperty({ example: 'fictional-csrf-token' })
 	csrfToken!: string;
@@ -37,6 +40,12 @@ export class PlatformMfaVerifiedResponseDto {
 }
 
 export class PlatformSessionResponseDto {
+	@ApiProperty({ example: true })
+	authenticated!: true;
+
+	@ApiProperty({ example: true })
+	mfaVerified!: true;
+
 	@ApiProperty({ example: '2f5298af-cf42-4e66-8968-a42be74cb34b' })
 	userId!: string;
 
