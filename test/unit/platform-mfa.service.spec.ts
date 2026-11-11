@@ -14,7 +14,8 @@ describe('PlatformMfaService', () => {
 	const challengeUpdateMany = jest.fn<() => Promise<{ count: number }>>();
 	const totpUpdateMany = jest.fn<() => Promise<{ count: number }>>();
 	const recoveryUpdateMany = jest.fn<() => Promise<{ count: number }>>();
-	const sessionCreate = jest.fn<() => Promise<unknown>>();
+	const sessionCreate = jest.fn<(input: unknown) => Promise<unknown>>();
+	const auditCreate = jest.fn<(input: unknown) => Promise<unknown>>();
 	const transaction = {
 		platformMfaChallenge: {
 			findUnique: challengeFindUnique,
@@ -23,6 +24,7 @@ describe('PlatformMfaService', () => {
 		platformTotpCredential: { updateMany: totpUpdateMany },
 		platformRecoveryCode: { updateMany: recoveryUpdateMany },
 		platformAdminSession: { create: sessionCreate },
+		identitySecurityAuditEvent: { create: auditCreate },
 	};
 	type TransactionOperation = (client: typeof transaction) => Promise<unknown>;
 	const runTransaction = jest
@@ -46,7 +48,10 @@ describe('PlatformMfaService', () => {
 				{ provide: ConfigService, useValue: config },
 				{
 					provide: PrismaService,
-					useValue: { $transaction: runTransaction },
+					useValue: {
+						$transaction: runTransaction,
+						platformMfaChallenge: { updateMany: challengeUpdateMany },
+					},
 				},
 				{
 					provide: PlatformTokenService,
@@ -80,6 +85,7 @@ describe('PlatformMfaService', () => {
 		totpUpdateMany.mockResolvedValue({ count: 1 });
 		recoveryUpdateMany.mockResolvedValue({ count: 1 });
 		sessionCreate.mockResolvedValue({ id: 'session-id' });
+		auditCreate.mockResolvedValue({ id: 'audit-id' });
 		verifyTotp.mockReturnValue({ timeStep: 31_556_952n });
 	});
 
@@ -118,7 +124,7 @@ describe('PlatformMfaService', () => {
 		expect(challengeUpdateMany).toHaveBeenCalledTimes(1);
 		expect(sessionCreate).toHaveBeenCalledTimes(1);
 		expect(runTransaction).toHaveBeenCalledWith(expect.any(Function), {
-			isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+			isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
 			maxWait: 8_000,
 			timeout: 10_000,
 		});
@@ -294,6 +300,83 @@ describe('PlatformMfaService', () => {
 		).rejects.toMatchObject({ status: 401 });
 		expect(sessionCreate).not.toHaveBeenCalled();
 	});
+
+	it.each([
+		{ consumedAt: new Date('2030-01-01T00:00:00.000Z') },
+		{ expiresAt: new Date('2030-01-01T00:00:00.000Z') },
+		{ failedAttempts: 5 },
+	])('rejects a terminal pending state before checking a factor: %p', async (state) => {
+		challengeFindUnique.mockResolvedValue({ ...createChallenge(), ...state });
+		await expect(
+			service.verify(
+				{
+					challengeToken: 'challenge-token-with-more-than-32-characters',
+					method: 'totp',
+					totpCode: '123456',
+				},
+				new Date('2030-01-01T00:00:00.000Z'),
+			),
+		).rejects.toMatchObject({ status: 401, terminal: true });
+		expect(verifyTotp).not.toHaveBeenCalled();
+		expect(sessionCreate).not.toHaveBeenCalled();
+	});
+
+	it('withholds a session when transactional audit persistence fails', async () => {
+		auditCreate.mockRejectedValueOnce(new Error('synthetic audit failure'));
+		await expect(
+			service.verify({
+				challengeToken: 'challenge-token-with-more-than-32-characters',
+				method: 'totp',
+				totpCode: '123456',
+			}),
+		).rejects.toMatchObject({ status: 503, response: { code: 'PLATFORM_MFA_UNAVAILABLE' } });
+	});
+
+	it.each([{ status: PlatformStaffStatus.SUSPENDED }, { roles: [] }])(
+		'rechecks suspended staff and revoked grants before MFA issuance: %p',
+		async (state) => {
+			const challenge = createChallenge();
+			challengeFindUnique.mockResolvedValue({
+				...challenge,
+				platformStaff: { ...challenge.platformStaff, ...state },
+			});
+			await expect(
+				service.verify({
+					challengeToken: 'challenge-token-with-more-than-32-characters',
+					method: 'totp',
+					totpCode: '123456',
+				}),
+			).rejects.toMatchObject({ status: 401, terminal: true });
+			expect(sessionCreate).not.toHaveBeenCalled();
+		},
+	);
+
+	it('audits session issuance without storing the raw token', async () => {
+		await service.verify({
+			challengeToken: 'challenge-token-with-more-than-32-characters',
+			method: 'totp',
+			totpCode: '123456',
+		});
+		expect(sessionCreate.mock.calls[0]?.[0]).toMatchObject({
+			data: { tokenDigest: 'session-token-digest' },
+		});
+		expect(auditCreate.mock.calls[0]?.[0]).toMatchObject({
+			data: { userId: 'user-id', actorKind: 'authentication', action: 'platform_session_issued' },
+		});
+		expect(JSON.stringify(sessionCreate.mock.calls)).not.toContain('"session-token"');
+		expect(JSON.stringify(auditCreate.mock.calls)).not.toContain('123456');
+	});
+
+	it('revokes and audits only an unused pending challenge', async () => {
+		await service.revokeChallenge('challenge-token-with-more-than-32-characters');
+		expect(challengeUpdateMany).toHaveBeenCalledTimes(1);
+		expect(auditCreate.mock.calls[0]?.[0]).toMatchObject({
+			data: { action: 'platform_challenge_revoked', actorUserId: 'user-id' },
+		});
+		challengeFindUnique.mockResolvedValue({ ...createChallenge(), consumedAt: new Date() });
+		await service.revokeChallenge('challenge-token-with-more-than-32-characters');
+		expect(auditCreate).toHaveBeenCalledTimes(1);
+	});
 });
 
 function createChallenge() {
@@ -310,6 +393,8 @@ function createChallenge() {
 		platformStaff: {
 			status: PlatformStaffStatus.ACTIVE,
 			user: {
+				id: 'user-id',
+				identityVersion: 1,
 				email: 'admin@example.com',
 				passwordCredential: {
 					passwordChangedAt: new Date('2029-01-01T00:00:00.000Z'),
@@ -323,7 +408,7 @@ function createChallenge() {
 					platformRole: {
 						key: 'platform.operator',
 						isSystem: false,
-						permissions: [{ platformPermissionId: 'permission-id' }],
+						permissions: [{ platformPermission: { key: 'platform.dashboard.read' } }],
 					},
 				},
 			],
