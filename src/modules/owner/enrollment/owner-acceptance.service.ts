@@ -76,6 +76,7 @@ export class OwnerAcceptanceService {
 				});
 				if (
 					challenge?.status !== OrganizationOwnerEnrollmentStatus.VERIFIED ||
+					challenge.id !== principal.enrollmentChallengeId ||
 					challenge.expiresAt <= now ||
 					challenge.userId !== principal.userId ||
 					challenge.user?.status !== UserStatus.ACTIVE ||
