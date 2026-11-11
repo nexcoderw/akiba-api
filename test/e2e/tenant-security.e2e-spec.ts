@@ -368,13 +368,15 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 		OrganizationMembershipStatus.PENDING,
 	])('denies inactive membership %s', async (status) => {
 		membershipStatus = status;
-		await call().expect(404);
+		await call().expect(401);
+		expect(memberReads).not.toHaveBeenCalled();
 	});
 	it.each([OrganizationStatus.PENDING, OrganizationStatus.SUSPENDED, OrganizationStatus.ARCHIVED])(
 		'denies nonoperating organization %s',
 		async (status) => {
 			organizations[0] = { id: A, name: 'Musomesa', slug: 'musomesa', status };
-			await call().expect(404);
+			await call().expect(401);
+			expect(memberReads).not.toHaveBeenCalled();
 		},
 	);
 	it('rechecks revocation and membership inside the data operation', async () => {
