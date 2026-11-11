@@ -200,7 +200,12 @@ export class OwnerEnrollmentService {
 				});
 				if (updated.count !== 1) throw invalidOwnerEnrollment();
 			}
-			return await this.createAuthenticatedResult(challenge.user.id, now);
+			return await this.createAuthenticatedResult(
+				challenge.user.id,
+				challenge.organizationId,
+				challenge.id,
+				now,
+			);
 		} catch (error: unknown) {
 			throw ownerEnrollmentFailure(error);
 		}
@@ -276,7 +281,12 @@ export class OwnerEnrollmentService {
 				return user.id;
 			}, TRANSACTION_OPTIONS);
 			phase = 'session_creation';
-			return await this.createAuthenticatedResult(userId, now);
+			return await this.createAuthenticatedResult(
+				userId,
+				challenge.organizationId,
+				challenge.id,
+				now,
+			);
 		} catch (error: unknown) {
 			// Classify locally; never log exception messages, credentials or submitted identity fields.
 			const errorKind =
@@ -299,6 +309,7 @@ export class OwnerEnrollmentService {
 				where: { tokenDigest: this.ownerTokens.enrollmentDigest(token) },
 				select: {
 					id: true,
+					organizationId: true,
 					purpose: true,
 					status: true,
 					expiresAt: true,
@@ -349,9 +360,16 @@ export class OwnerEnrollmentService {
 
 	private async createAuthenticatedResult(
 		userId: string,
+		organizationId: string,
+		challengeId: string,
 		now: Date,
 	): Promise<VerifiedOwnerEnrollment> {
-		const session = await this.sessions.create(userId, OwnerSessionAssurance.AAL1, now);
+		const session = await this.sessions.create(
+			userId,
+			{ organizationId, enrollmentChallengeId: challengeId },
+			OwnerSessionAssurance.AAL1,
+			now,
+		);
 		return {
 			status: 'verified',
 			expiresAt: session.expiresAt.toISOString(),
