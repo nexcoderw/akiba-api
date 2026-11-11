@@ -384,29 +384,31 @@ export class OwnerSessionService {
 					},
 				});
 				if (session === null) return null;
+				const credential = session.user.passwordCredential;
+				const credentialValid =
+					credential === null
+						? false
+						: credential.disabledAt === null &&
+							credential.passwordChangedAt <= session.authenticatedAt;
 				const invalid =
 					session.revokedAt !== null ||
 					session.organizationId === null ||
 					(session.membershipId === null && session.enrollmentChallengeId === null) ||
 					(session.membershipId !== null && session.enrollmentChallengeId !== null) ||
 					(session.membershipId !== null &&
-						(session.membership === null ||
-							session.membership.id !== session.membershipId ||
-							session.membership.organization.id !== session.organizationId ||
-							session.membership.status !== OrganizationMembershipStatus.ACTIVE ||
-							session.membership.organization.status !== OrganizationStatus.ACTIVE)) ||
+						(session.membership?.id !== session.membershipId ||
+							session.membership?.organization.id !== session.organizationId ||
+							session.membership?.status !== OrganizationMembershipStatus.ACTIVE ||
+							session.membership?.organization.status !== OrganizationStatus.ACTIVE)) ||
 					(session.enrollmentChallengeId !== null &&
-						(session.enrollmentChallenge === null ||
-							session.enrollmentChallenge.id !== session.enrollmentChallengeId ||
-							session.enrollmentChallenge.status !== OrganizationOwnerEnrollmentStatus.VERIFIED ||
-							session.enrollmentChallenge.consumedAt !== null ||
-							session.enrollmentChallenge.expiresAt <= now)) ||
+						(session.enrollmentChallenge?.id !== session.enrollmentChallengeId ||
+							session.enrollmentChallenge?.status !== OrganizationOwnerEnrollmentStatus.VERIFIED ||
+							session.enrollmentChallenge?.consumedAt !== null ||
+							(session.enrollmentChallenge?.expiresAt ?? now) <= now)) ||
 					session.idleExpiresAt <= now ||
 					session.absoluteExpiresAt <= now ||
 					!accountCanAuthenticate(session.user.status, session.user.emailVerifiedAt) ||
-					session.user.passwordCredential === null ||
-					session.user.passwordCredential.disabledAt !== null ||
-					session.user.passwordCredential.passwordChangedAt > session.authenticatedAt;
+					!credentialValid;
 				if (invalid) {
 					if (session.revokedAt === null) {
 						const reason =
