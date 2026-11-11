@@ -2,6 +2,8 @@ export const PLATFORM_SESSION_COOKIE = '__Host-akiba-platform-session';
 export const LOCAL_PLATFORM_SESSION_COOKIE = 'akiba-platform-session';
 export const PLATFORM_CSRF_COOKIE = '__Host-akiba-platform-csrf';
 export const LOCAL_PLATFORM_CSRF_COOKIE = 'akiba-platform-csrf';
+export const PLATFORM_CHALLENGE_COOKIE = '__Host-akiba-platform-challenge';
+export const LOCAL_PLATFORM_CHALLENGE_COOKIE = 'akiba-platform-challenge';
 export const PLATFORM_CSRF_HEADER = 'x-platform-csrf-token';
 export const PLATFORM_PERMISSIONS_METADATA = 'platform-auth:permissions';
 
