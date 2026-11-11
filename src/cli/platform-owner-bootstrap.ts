@@ -1,8 +1,6 @@
 import 'reflect-metadata';
 
-import { timingSafeEqual } from 'node:crypto';
-import { createInterface, type Interface } from 'node:readline/promises';
-import { Writable } from 'node:stream';
+import { createInterface } from 'node:readline/promises';
 
 import { NestFactory } from '@nestjs/core';
 
@@ -15,58 +13,22 @@ import {
 } from '../modules/platform/bootstrap/platform-bootstrap.types.js';
 
 const INITIALIZE_AUTHORIZATION = 'AUTHORIZE FIRST PLATFORM OWNER';
-const ACTIVATE_AUTHORIZATION = 'ACTIVATE FIRST PLATFORM OWNER';
-const EMAIL_VERIFICATION_CONFIRMATION = 'MAILBOX OWNERSHIP VERIFIED';
-
-class MutedTerminalOutput extends Writable {
-	muted = false;
-
-	override _write(
-		chunk: Buffer | string,
-		encoding: BufferEncoding,
-		callback: (error?: Error | null) => void,
-	): void {
-		if (!this.muted) {
-			if (typeof chunk === 'string') {
-				process.stdout.write(chunk, encoding);
-			} else {
-				process.stdout.write(chunk);
-			}
-		}
-		callback();
-	}
-}
-
-class OperatorPrompts {
-	private readonly output = new MutedTerminalOutput();
-	private readonly input: Interface;
-
-	constructor() {
-		this.input = createInterface({ input: process.stdin, output: this.output, terminal: true });
-	}
-
-	async text(question: string): Promise<string> {
-		return await this.input.question(question);
-	}
-
-	async secret(question: string): Promise<Buffer> {
-		process.stdout.write(question);
-		this.output.muted = true;
-		try {
-			return Buffer.from(await this.input.question(''), 'utf8');
-		} finally {
-			this.output.muted = false;
-			process.stdout.write('\n');
-		}
-	}
-
-	close(): void {
-		this.input.close();
-	}
-}
 
 async function run(): Promise<void> {
 	const stage = parseStage(process.argv[2]);
+	const selectedEnvironment = parseEnvironment(process.argv[3]);
+	if (process.argv.length !== 4 || process.env.NODE_ENV !== selectedEnvironment) {
+		throw new PlatformBootstrapError(
+			'BOOTSTRAP_INVALID_INPUT',
+			'Select the same explicit development or production environment in NODE_ENV and the command.',
+		);
+	}
+	if (stage === 'activate') {
+		throw new PlatformBootstrapError(
+			'BOOTSTRAP_ENROLLMENT_UNAVAILABLE',
+			'Owner activation requires a verified mailbox challenge and protected credential enrollment.',
+		);
+	}
 	if (!process.stdin.isTTY || !process.stdout.isTTY) {
 		throw new PlatformBootstrapError(
 			'BOOTSTRAP_INVALID_INPUT',
@@ -76,18 +38,20 @@ async function run(): Promise<void> {
 
 	const application = await NestFactory.createApplicationContext(PlatformBootstrapCliModule, {
 		logger: false,
-		// Let the sanitized CLI error handler report startup failures instead of Nest exiting silently.
 		abortOnError: false,
 	});
-	const prompts = new OperatorPrompts();
+	const prompts = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
 	try {
 		const bootstrap = application.get(PlatformOwnerBootstrapService);
-		await confirmTarget(prompts, bootstrap.getTarget());
-		if (stage === 'initialize') {
-			await initialize(prompts, bootstrap);
-		} else {
-			await activate(prompts, bootstrap);
+		const target = bootstrap.getTarget();
+		if (target.environment !== selectedEnvironment) {
+			throw new PlatformBootstrapError(
+				'BOOTSTRAP_UNSAFE_DATABASE',
+				'The configured environment does not match the selected bootstrap target.',
+			);
 		}
+		await confirmTarget(prompts.question.bind(prompts), target);
+		await initialize(prompts.question.bind(prompts), bootstrap, selectedEnvironment);
 	} finally {
 		prompts.close();
 		await application.close();
@@ -95,16 +59,17 @@ async function run(): Promise<void> {
 }
 
 async function confirmTarget(
-	prompts: OperatorPrompts,
+	question: (prompt: string) => Promise<string>,
 	target: PlatformBootstrapTarget,
 ): Promise<void> {
 	writeLine('Platform owner bootstrap is a privileged, one-time operation.');
 	writeLine(`Environment: ${target.environment}`);
 	writeLine(`Database target: ${target.databaseHost}/${target.databaseName}`);
 	writeLine(`Database user: ${target.databaseRole}`);
-	const phrase = `CONFIRM ${target.environment} ${target.databaseHost}/${target.databaseName} ${target.databaseRole}`;
-	const confirmation = await prompts.text(`Type "${phrase}" to continue: `);
-	if (confirmation !== phrase) {
+	const phrase =
+		`CONFIRM ${target.environment} ${target.databaseHost}/${target.databaseName} ` +
+		target.databaseRole;
+	if ((await question(`Type "${phrase}" to continue: `)) !== phrase) {
 		throw new PlatformBootstrapError(
 			'BOOTSTRAP_INVALID_INPUT',
 			'The database target confirmation did not match.',
@@ -113,86 +78,48 @@ async function confirmTarget(
 }
 
 async function initialize(
-	prompts: OperatorPrompts,
+	question: (prompt: string) => Promise<string>,
 	bootstrap: PlatformOwnerBootstrapService,
+	environment: string,
 ): Promise<void> {
-	if (
-		(await prompts.text(`Type "${INITIALIZE_AUTHORIZATION}" to authorize initialization: `)) !==
-		INITIALIZE_AUTHORIZATION
-	) {
+	const phrase =
+		environment === 'production'
+			? 'AUTHORIZE PRODUCTION FIRST PLATFORM OWNER'
+			: INITIALIZE_AUTHORIZATION;
+	if ((await question(`Type "${phrase}" to authorize initialization: `)) !== phrase) {
 		throw new PlatformBootstrapError(
 			'BOOTSTRAP_INVALID_INPUT',
 			'First-owner initialization was not authorized.',
 		);
 	}
-	const email = await prompts.text('Owner email: ');
-	const displayName = await prompts.text('Owner display name: ');
-	const password = await prompts.secret('Owner password (input hidden): ');
-	const confirmation = await prompts.secret('Confirm owner password (input hidden): ');
-	try {
-		if (password.length !== confirmation.length || !timingSafeEqual(password, confirmation)) {
-			throw new PlatformBootstrapError(
-				'BOOTSTRAP_INVALID_INPUT',
-				'The password confirmation did not match.',
-			);
-		}
-		const enrollment = await bootstrap.initialize({ email, displayName, password });
-		writeLine('Pending owner initialization completed. The account is not active.');
-		writeLine(
-			'Enroll this TOTP factor now. The secret is displayed only in this terminal session.',
-		);
-		writeLine(`Enrollment URI: ${enrollment.enrollmentUri}`);
-		writeLine(`Manual secret: ${enrollment.secret}`);
-		writeLine('After independent mailbox verification, run the activation command.');
-	} finally {
-		password.fill(0);
-		confirmation.fill(0);
-	}
-}
-
-async function activate(
-	prompts: OperatorPrompts,
-	bootstrap: PlatformOwnerBootstrapService,
-): Promise<void> {
-	if (
-		(await prompts.text(`Type "${ACTIVATE_AUTHORIZATION}" to authorize activation: `)) !==
-		ACTIVATE_AUTHORIZATION
-	) {
+	const email = await question('Owner email: ');
+	const confirmation = await question('Confirm owner email: ');
+	if (email !== confirmation) {
 		throw new PlatformBootstrapError(
 			'BOOTSTRAP_INVALID_INPUT',
-			'First-owner activation was not authorized.',
+			'The owner email confirmation did not match.',
 		);
 	}
-	const email = await prompts.text('Pending owner email: ');
-	const totpCodeBuffer = await prompts.secret('Current six-digit TOTP code (input hidden): ');
-	try {
-		const emailConfirmation = await prompts.text(
-			'After completing the independent mailbox challenge, type ' +
-				`"${EMAIL_VERIFICATION_CONFIRMATION}": `,
-		);
-		const result = await bootstrap.activate({
-			email,
-			totpCode: totpCodeBuffer.toString('utf8'),
-			emailOwnershipVerified: emailConfirmation === EMAIL_VERIFICATION_CONFIRMATION,
-		});
-		writeLine('The first platform owner is active with confirmed MFA.');
-		writeLine('Store these single-use recovery codes in an approved offline secret store.');
-		writeLine('They will not be displayed again:');
-		for (const code of result.recoveryCodes) {
-			writeLine(code);
-		}
-	} finally {
-		totpCodeBuffer.fill(0);
-	}
+	const displayName = await question('Owner display name: ');
+	await bootstrap.initialize({ email, displayName });
+	writeLine('The first owner is reserved and remains pending.');
+	writeLine('No password or MFA factor was enrolled.');
+	writeLine('Activation requires a protected mailbox challenge and enrollment flow.');
 }
 
 function parseStage(value: string | undefined): PlatformBootstrapStage {
-	if (value === 'initialize' || value === 'activate') {
-		return value;
-	}
+	if (value === 'initialize' || value === 'activate') return value;
 	throw new PlatformBootstrapError(
 		'BOOTSTRAP_INVALID_INPUT',
 		'Choose exactly one bootstrap stage: initialize or activate.',
+	);
+}
+
+function parseEnvironment(value: string | undefined): 'development' | 'production' {
+	if (value === 'development' || value === 'production') return value;
+	throw new PlatformBootstrapError(
+		'BOOTSTRAP_INVALID_INPUT',
+		'Choose exactly one target: development or production.',
 	);
 }
 
