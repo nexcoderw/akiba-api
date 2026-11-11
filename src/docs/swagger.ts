@@ -4,7 +4,10 @@ import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swag
 import { API_VERSION } from '../common/constants/api.constants.js';
 import { ApiErrorResponseDto } from '../common/dto/api-error-response.dto.js';
 import { OWNER_SESSION_COOKIE } from '../modules/owner/auth/owner-auth.constants.js';
-import { PLATFORM_SESSION_COOKIE } from '../modules/platform/auth/platform-auth.constants.js';
+import {
+	PLATFORM_CHALLENGE_COOKIE,
+	PLATFORM_SESSION_COOKIE,
+} from '../modules/platform/auth/platform-auth.constants.js';
 
 /** Builds the OpenAPI document used by protected Swagger UI and JSON export workflows. */
 export function createOpenApiDocument(application: INestApplication): OpenAPIObject {
@@ -16,6 +19,11 @@ export function createOpenApiDocument(application: INestApplication): OpenAPIObj
 		.setVersion(API_VERSION)
 		.addServer('/', 'API origin; operation paths include the configured prefix and version')
 		.addCookieAuth(PLATFORM_SESSION_COOKIE, { type: 'apiKey', in: 'cookie' }, 'platform-session')
+		.addCookieAuth(
+			PLATFORM_CHALLENGE_COOKIE,
+			{ type: 'apiKey', in: 'cookie' },
+			'platform-challenge',
+		)
 		.addCookieAuth(OWNER_SESSION_COOKIE, { type: 'apiKey', in: 'cookie' }, 'owner-session')
 		.build();
 
