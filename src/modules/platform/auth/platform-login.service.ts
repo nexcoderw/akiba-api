@@ -3,7 +3,6 @@ import { accountCanAuthenticate } from '../../../common/identity/account-state.p
 import {
 	Injectable,
 	Logger,
-	PreconditionFailedException,
 	ServiceUnavailableException,
 	UnauthorizedException,
 } from '@nestjs/common';
@@ -17,6 +16,13 @@ import { PLATFORM_AUTH_ERROR } from './platform-auth.constants.js';
 import { PlatformLoginAttemptService } from './platform-login-attempt.service.js';
 import { PlatformPasswordService } from './platform-password.service.js';
 import { PlatformTokenService } from './platform-token.service.js';
+import { effectivePlatformPermissions } from './platform-permission-policy.js';
+import { recordPlatformAuthentication } from './platform-authentication-audit.js';
+
+/** Internal result: the controller puts the proof in an HttpOnly cookie. */
+export interface PlatformLoginChallenge extends PlatformMfaChallengeResponseDto {
+	readonly challengeToken: string;
+}
 
 @Injectable()
 export class PlatformLoginService {
@@ -42,10 +48,17 @@ export class PlatformLoginService {
 		input: PlatformLoginDto,
 		ipAddress: string,
 		now = new Date(),
-	): Promise<PlatformMfaChallengeResponseDto> {
+		requestId?: string,
+	): Promise<PlatformLoginChallenge> {
 		const email = normalizeEmailIdentity(input.email);
 		if (email === null) throw new UnauthorizedException(PLATFORM_AUTH_ERROR.invalidCredentials);
-		this.attempts.assertAllowed(ipAddress, email, now.getTime());
+		// Reserve before asynchronous work, including successful passwords and dependency failures.
+		try {
+			this.attempts.consume(ipAddress, email, now.getTime());
+		} catch (error: unknown) {
+			this.logger.warn(JSON.stringify({ event: 'platform_login_admission_rejected', requestId }));
+			throw error;
+		}
 		let identity: Awaited<ReturnType<typeof this.readIdentity>>;
 		try {
 			identity = await this.readIdentity(email);
@@ -54,11 +67,16 @@ export class PlatformLoginService {
 		}
 
 		const passwordHash = identity?.passwordCredential?.passwordHash ?? this.passwords.dummyHash;
-		const passwordValid = await this.passwords.verify(
-			passwordHash,
-			input.password,
-			identity?.passwordCredential?.normalization ?? 'raw',
-		);
+		let passwordValid: boolean;
+		try {
+			passwordValid = await this.passwords.verify(
+				passwordHash,
+				input.password,
+				identity?.passwordCredential?.normalization ?? 'raw',
+			);
+		} catch (error: unknown) {
+			throw this.persistenceFailure(error);
+		}
 		if (
 			!passwordValid ||
 			identity === null ||
@@ -66,22 +84,29 @@ export class PlatformLoginService {
 			identity.passwordCredential?.disabledAt !== null ||
 			identity.platformStaff?.status !== PlatformStaffStatus.ACTIVE
 		) {
-			this.attempts.recordFailure(ipAddress, email, now.getTime());
-			this.logger.warn(JSON.stringify({ event: 'platform_login_rejected' }));
+			this.logger.warn(
+				JSON.stringify({
+					event: 'platform_login_rejected',
+					accountKey: this.tokens.digest(JSON.stringify(['platform-login-account-v1', email])),
+					requestId,
+				}),
+			);
 			throw new UnauthorizedException(PLATFORM_AUTH_ERROR.invalidCredentials);
 		}
 		const platformStaff = identity.platformStaff;
+		const identityVersion = identity.identityVersion;
 
 		const totpAvailable =
 			platformStaff.totpCredential?.verifiedAt !== null &&
 			platformStaff.totpCredential?.verifiedAt !== undefined &&
 			platformStaff.totpCredential.disabledAt === null;
 		const recoveryAvailable = platformStaff.recoveryCodes.length > 0;
-		if (!totpAvailable && !recoveryAvailable) {
-			throw new PreconditionFailedException({
-				code: 'PLATFORM_MFA_SETUP_REQUIRED',
-				message: 'A confirmed MFA factor is required before platform access',
-			});
+		if (
+			(!totpAvailable && !recoveryAvailable) ||
+			effectivePlatformPermissions(platformStaff.roles).length === 0
+		) {
+			this.logger.warn(JSON.stringify({ event: 'platform_login_rejected', requestId }));
+			throw new UnauthorizedException(PLATFORM_AUTH_ERROR.invalidCredentials);
 		}
 
 		const challengeToken = this.tokens.createToken();
@@ -89,16 +114,28 @@ export class PlatformLoginService {
 		const expiresAt = new Date(now.getTime() + this.challengeLifetimeMilliseconds);
 		try {
 			await this.prisma.$transaction(
-				[
-					this.prisma.platformMfaChallenge.updateMany({
+				async (transaction) => {
+					const current = await this.readIdentity(email, transaction);
+					if (
+						current === null ||
+						!accountCanAuthenticate(current.status, current.emailVerifiedAt) ||
+						current.identityVersion !== identityVersion ||
+						current.passwordCredential?.disabledAt !== null ||
+						current.passwordCredential.passwordHash !== passwordHash ||
+						current.platformStaff?.id !== platformStaff.id ||
+						current.platformStaff.status !== PlatformStaffStatus.ACTIVE ||
+						effectivePlatformPermissions(current.platformStaff.roles).length === 0
+					)
+						throw new UnauthorizedException(PLATFORM_AUTH_ERROR.invalidCredentials);
+					await transaction.platformMfaChallenge.updateMany({
 						where: {
 							platformStaffId: platformStaff.id,
 							consumedAt: null,
 							expiresAt: { gt: now },
 						},
 						data: { consumedAt: now },
-					}),
-					this.prisma.platformMfaChallenge.create({
+					});
+					await transaction.platformMfaChallenge.create({
 						data: {
 							platformStaffId: platformStaff.id,
 							tokenDigest: this.tokens.digest(challengeToken),
@@ -107,19 +144,34 @@ export class PlatformLoginService {
 							expiresAt,
 							maxAttempts: this.maximumAttempts,
 						},
-					}),
-				],
-				{ isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+					});
+					await recordPlatformAuthentication(
+						transaction,
+						current,
+						'platform_primary_authenticated',
+						requestId,
+					);
+				},
+				{
+					isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+					maxWait: 5000,
+					timeout: 10_000,
+				},
 			);
 		} catch (error: unknown) {
 			throw this.persistenceFailure(error);
 		}
-		this.attempts.clearAccount(email);
 		this.logger.log(
-			JSON.stringify({ event: 'platform_mfa_challenge_created', staffId: platformStaff.id }),
+			JSON.stringify({
+				event: 'platform_mfa_challenge_created',
+				staffId: platformStaff.id,
+				requestId,
+			}),
 		);
 
 		return {
+			status: 'MFA_REQUIRED',
+			nextStep: 'VERIFY_MFA',
 			challengeToken,
 			csrfToken,
 			expiresAt: expiresAt.toISOString(),
@@ -131,11 +183,15 @@ export class PlatformLoginService {
 		};
 	}
 
-	private readIdentity(email: string) {
-		return this.prisma.user.findUnique({
+	private readIdentity(
+		email: string,
+		client: Pick<Prisma.TransactionClient, 'user'> = this.prisma,
+	) {
+		return client.user.findUnique({
 			where: { email },
 			select: {
 				id: true,
+				identityVersion: true,
 				status: true,
 				emailVerifiedAt: true,
 				passwordCredential: {
@@ -145,6 +201,17 @@ export class PlatformLoginService {
 					select: {
 						id: true,
 						status: true,
+						roles: {
+							select: {
+								platformRole: {
+									select: {
+										key: true,
+										isSystem: true,
+										permissions: { select: { platformPermission: { select: { key: true } } } },
+									},
+								},
+							},
+						},
 						totpCredential: {
 							select: { verifiedAt: true, disabledAt: true },
 						},
@@ -160,6 +227,7 @@ export class PlatformLoginService {
 	}
 
 	private persistenceFailure(error: unknown): Error {
+		if (error instanceof UnauthorizedException) return error;
 		return new ServiceUnavailableException(
 			{
 				code: 'PLATFORM_LOGIN_UNAVAILABLE',
