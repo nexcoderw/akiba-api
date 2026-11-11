@@ -157,19 +157,24 @@ export class OwnerEnrollmentController {
 	@ApiConflictResponse({ type: ApiErrorResponseDto })
 	@ApiTooManyRequestsResponse({ type: ApiErrorResponseDto })
 	@ApiServiceUnavailableResponse({ type: ApiErrorResponseDto })
-	accept(
+	async accept(
 		@Body() input: AcceptOwnerInvitationDto,
 		@Req() request: OwnerRequest,
+		@Res({ passthrough: true }) response: Response,
 	): Promise<OwnerInvitationAcceptedResponseDto> {
 		const principal = request.ownerPrincipal;
 		if (principal === undefined) throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidSession);
-		return this.acceptance.accept(
+		const accepted = await this.acceptance.accept(
 			principal,
 			input.challengeToken,
 			request.requestId,
 			undefined,
 			request.ownerOrganizationSlug,
 		);
+		// Acceptance consumes the provisional challenge. A fresh sign-in issues a
+		// membership-bound session with a new CSRF token.
+		this.cookies.clear(response);
+		return accepted;
 	}
 
 	private setAuthenticated(
