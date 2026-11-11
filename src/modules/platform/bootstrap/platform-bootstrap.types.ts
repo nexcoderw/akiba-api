@@ -6,11 +6,10 @@ export type PlatformBootstrapErrorCode =
 	| 'BOOTSTRAP_ALREADY_INITIALIZED'
 	| 'BOOTSTRAP_IDENTITY_CONFLICT'
 	| 'BOOTSTRAP_ROLE_CONFLICT'
-	| 'BOOTSTRAP_PENDING_OWNER_NOT_FOUND'
 	| 'BOOTSTRAP_STATE_CONFLICT'
-	| 'BOOTSTRAP_MFA_REJECTED'
 	| 'BOOTSTRAP_CONCURRENT_OPERATION'
 	| 'BOOTSTRAP_UNSAFE_DATABASE'
+	| 'BOOTSTRAP_ENROLLMENT_UNAVAILABLE'
 	| 'BOOTSTRAP_DATABASE_FAILED';
 
 export class PlatformBootstrapError extends Error {
@@ -35,20 +34,4 @@ export interface PlatformBootstrapTarget {
 export interface InitializePlatformOwnerInput {
 	readonly email: string;
 	readonly displayName: string;
-	readonly password: Buffer;
-}
-
-export interface PlatformOwnerEnrollment {
-	readonly enrollmentUri: string;
-	readonly secret: string;
-}
-
-export interface ActivatePlatformOwnerInput {
-	readonly email: string;
-	readonly totpCode: string;
-	readonly emailOwnershipVerified: boolean;
-}
-
-export interface PlatformOwnerActivation {
-	readonly recoveryCodes: readonly string[];
 }
