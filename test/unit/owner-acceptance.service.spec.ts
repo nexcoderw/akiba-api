@@ -22,6 +22,7 @@ const PRINCIPAL: OwnerPrincipal = {
 	email: 'owner@example.test',
 	assurance: 'AAL1',
 	expiresAt: EXPIRES_AT,
+	enrollmentChallengeId: 'challenge',
 	organizations: [],
 };
 
