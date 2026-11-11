@@ -2,6 +2,7 @@ import { jest } from '@jest/globals';
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
+import { ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler';
 import { PrismaService } from '@nexcoderw/akiba-db';
 import request from 'supertest';
 
@@ -14,7 +15,10 @@ import { PlatformAuthModule } from '../../src/modules/platform/auth/platform-aut
 import { AppModule } from '../../src/app.module.js';
 import { validateEnvironment } from '../../src/config/environment.validation.js';
 import { PlatformLoginService } from '../../src/modules/platform/auth/platform-login.service.js';
-import { PlatformMfaService } from '../../src/modules/platform/auth/platform-mfa.service.js';
+import {
+	PlatformMfaRejectedException,
+	PlatformMfaService,
+} from '../../src/modules/platform/auth/platform-mfa.service.js';
 import { PlatformEmailOtpService } from '../../src/modules/platform/auth/platform-email-otp.service.js';
 import { PlatformPermissionGuard } from '../../src/modules/platform/auth/platform-permission.guard.js';
 import { RequirePlatformPermissions } from '../../src/modules/platform/auth/platform-permissions.decorator.js';
@@ -24,6 +28,7 @@ import { PlatformSessionService } from '../../src/modules/platform/auth/platform
 const ADMIN_ORIGIN = 'http://localhost:4000';
 const CSRF_TOKEN = 'fictional-csrf-token-with-more-than-32-characters';
 const SESSION_TOKEN = 'fictional-session-token-with-more-than-32-characters';
+const CHALLENGE_TOKEN = 'fictional-challenge-token-with-more-than-32-characters';
 
 @AccessBoundary('platform')
 @Controller('platform/permission-probe')
@@ -38,15 +43,20 @@ class PlatformPermissionProbeController {
 
 describe('platform authentication HTTP API (e2e)', () => {
 	let application: NestExpressApplication | undefined;
+	let pendingCookies: string;
+	let throttleStorage: ThrottlerStorageService;
 	const login = jest.fn<PlatformLoginService['login']>();
 	const verifyMfa = jest.fn<PlatformMfaService['verify']>();
 	const authenticate = jest.fn<PlatformSessionService['authenticate']>();
 	const revoke = jest.fn<PlatformSessionService['revoke']>();
 	const sendEmailOtp = jest.fn<PlatformEmailOtpService['send']>();
+	const revokeChallenge = jest.fn<PlatformMfaService['revokeChallenge']>();
 
 	beforeAll(async () => {
 		login.mockResolvedValue({
-			challengeToken: 'fictional-challenge-token-with-more-than-32-characters',
+			status: 'MFA_REQUIRED',
+			nextStep: 'VERIFY_MFA',
+			challengeToken: CHALLENGE_TOKEN,
 			csrfToken: CSRF_TOKEN,
 			expiresAt: '2030-01-01T00:05:00.000Z',
 			methods: ['totp'],
@@ -68,6 +78,7 @@ describe('platform authentication HTTP API (e2e)', () => {
 			permissions: ['platform.dashboard.read'],
 		});
 		revoke.mockResolvedValue(undefined);
+		revokeChallenge.mockResolvedValue(undefined);
 		sendEmailOtp.mockResolvedValue({
 			status: 'sent',
 			expiresAt: '2030-01-01T00:05:00.000Z',
@@ -85,7 +96,7 @@ describe('platform authentication HTTP API (e2e)', () => {
 			.overrideProvider(PlatformLoginService)
 			.useValue({ login })
 			.overrideProvider(PlatformMfaService)
-			.useValue({ verify: verifyMfa })
+			.useValue({ verify: verifyMfa, revokeChallenge })
 			.overrideProvider(PlatformSessionService)
 			.useValue({ authenticate, revoke })
 			.overrideProvider(PlatformEmailOtpService)
@@ -94,6 +105,24 @@ describe('platform authentication HTTP API (e2e)', () => {
 		application = module.createNestApplication<NestExpressApplication>();
 		configureApplication(application, validateEnvironment({ NODE_ENV: 'test' }));
 		await application.init();
+		const storage = module.get<ThrottlerStorage>(ThrottlerStorage);
+		if (!(storage instanceof ThrottlerStorageService)) throw new Error('Expected real throttling.');
+		throttleStorage = storage;
+		const pending = await request(application.getHttpServer())
+			.post('/api/v1/platform/auth/login')
+			.set('Origin', ADMIN_ORIGIN)
+			.send({ email: 'admin@example.com', password: 'fictional password' })
+			.expect(200);
+		const challengeCookie = (pending.get('Set-Cookie') ?? [])
+			.find((cookie) => cookie.startsWith('akiba-platform-challenge='))
+			?.split(';')[0];
+		if (challengeCookie === undefined) throw new Error('Expected a pending challenge cookie.');
+		pendingCookies = `${challengeCookie}; akiba-platform-csrf=${CSRF_TOKEN}`;
+	});
+
+	beforeEach(() => {
+		// Keep the real guard and counters; each independent HTTP scenario gets its own window.
+		throttleStorage.onApplicationShutdown();
 	});
 
 	afterAll(async () => {
@@ -104,9 +133,9 @@ describe('platform authentication HTTP API (e2e)', () => {
 		const response = await request(requireApplication(application).getHttpServer())
 			.post('/api/v1/platform/auth/mfa/email')
 			.set('Origin', ADMIN_ORIGIN)
-			.set('Cookie', `akiba-platform-csrf=${CSRF_TOKEN}`)
+			.set('Cookie', pendingCookies)
 			.set('X-Platform-CSRF-Token', CSRF_TOKEN)
-			.send({ challengeToken: 'fictional-challenge-token-with-more-than-32-characters' })
+			.send({})
 			.expect(200);
 		expect(response.headers['set-cookie']).toBeUndefined();
 		const body: unknown = response.body;
@@ -137,12 +166,16 @@ describe('platform authentication HTTP API (e2e)', () => {
 			.send({ email: ' ADMIN@EXAMPLE.COM ', password: 'fictional password' })
 			.expect(200);
 		const body: unknown = response.body;
-		expect(isRecord(body) && body.challengeToken).toBe(
-			'fictional-challenge-token-with-more-than-32-characters',
-		);
+		expect(body).toMatchObject({ status: 'MFA_REQUIRED', nextStep: 'VERIFY_MFA' });
+		expect(isRecord(body) && body.challengeToken).toBeUndefined();
+		expect(JSON.stringify(body)).not.toContain(CHALLENGE_TOKEN);
 		const cookies = response.get('Set-Cookie') ?? [];
 		expect(cookies.some((cookie) => cookie.startsWith('akiba-platform-csrf='))).toBe(true);
 		expect(cookies.some((cookie) => cookie.startsWith('akiba-platform-session='))).toBe(false);
+		const pendingCookie = cookies.find((cookie) => cookie.startsWith('akiba-platform-challenge='));
+		expect(pendingCookie).toContain('HttpOnly');
+		expect(pendingCookie).toContain('SameSite=Strict');
+		expect(pendingCookie).not.toContain('Domain=');
 		const loginCall = login.mock.calls[0];
 		if (loginCall === undefined) {
 			throw new Error('Expected the login service to be called.');
@@ -177,7 +210,6 @@ describe('platform authentication HTTP API (e2e)', () => {
 			.post('/api/v1/platform/auth/mfa/verify')
 			.set('Origin', ADMIN_ORIGIN)
 			.send({
-				challengeToken: 'fictional-challenge-token-with-more-than-32-characters',
 				method: 'totp',
 				totpCode: '123456',
 			})
@@ -188,10 +220,9 @@ describe('platform authentication HTTP API (e2e)', () => {
 		const response = await request(requireApplication(application).getHttpServer())
 			.post('/api/v1/platform/auth/mfa/verify')
 			.set('Origin', ADMIN_ORIGIN)
-			.set('Cookie', `akiba-platform-csrf=${CSRF_TOKEN}`)
+			.set('Cookie', pendingCookies)
 			.set('x-platform-csrf-token', CSRF_TOKEN)
 			.send({
-				challengeToken: 'fictional-challenge-token-with-more-than-32-characters',
 				method: 'totp',
 				totpCode: '123456',
 			})
@@ -202,17 +233,118 @@ describe('platform authentication HTTP API (e2e)', () => {
 		expect(sessionCookie).toContain('SameSite=Strict');
 		expect(sessionCookie).toContain('Path=/');
 		expect(sessionCookie).not.toContain('Domain=');
+		expect(cookies.join(';')).toContain('akiba-platform-challenge=;');
+		expect(JSON.stringify(response.body)).not.toContain(SESSION_TOKEN);
+		expect(verifyMfa).toHaveBeenCalledWith(
+			{ challengeToken: CHALLENGE_TOKEN, method: 'totp', totpCode: '123456' },
+			undefined,
+			expect.stringMatching(/^req_[0-9a-f-]{36}$/u),
+		);
 	});
 
 	it('returns current server-resolved roles and permissions', async () => {
 		const response = await request(requireApplication(application).getHttpServer())
-			.get('/api/v1/platform/auth/session')
+			.get('/api/v1/platform/auth/me')
 			.set('Origin', ADMIN_ORIGIN)
 			.set('Cookie', `akiba-platform-session=${SESSION_TOKEN}`)
 			.expect(200);
 		const body: unknown = response.body;
 		expect(isRecord(body) && body.email).toBe('admin@example.com');
 		expect(isRecord(body) && body.permissions).toEqual(['platform.dashboard.read']);
+		expect(body).toMatchObject({ authenticated: true, mfaVerified: true });
+	});
+
+	it('does not accept a pending challenge as a session for me', async () => {
+		await request(requireApplication(application).getHttpServer())
+			.get('/api/v1/platform/auth/me')
+			.set('Origin', ADMIN_ORIGIN)
+			.set('Cookie', pendingCookies)
+			.expect(401);
+	});
+
+	it('rejects an injected JSON challenge even with valid cookies', async () => {
+		const before = verifyMfa.mock.calls.length;
+		await request(requireApplication(application).getHttpServer())
+			.post('/api/v1/platform/auth/mfa/verify')
+			.set('Origin', ADMIN_ORIGIN)
+			.set('Cookie', pendingCookies)
+			.set('x-platform-csrf-token', CSRF_TOKEN)
+			.send({ challengeToken: CHALLENGE_TOKEN, method: 'totp', totpCode: '123456' })
+			.expect(400);
+		expect(verifyMfa).toHaveBeenCalledTimes(before);
+	});
+
+	it('rejects a recipient or bearer challenge in an email-delivery body', async () => {
+		const before = sendEmailOtp.mock.calls.length;
+		await request(requireApplication(application).getHttpServer())
+			.post('/api/v1/platform/auth/mfa/email')
+			.set('Origin', ADMIN_ORIGIN)
+			.set('Cookie', pendingCookies)
+			.set('x-platform-csrf-token', CSRF_TOKEN)
+			.send({ challengeToken: CHALLENGE_TOKEN, recipient: 'attacker@example.com' })
+			.expect(400);
+		expect(sendEmailOtp).toHaveBeenCalledTimes(before);
+	});
+
+	it('rejects a missing or tampered pending cookie before MFA verification', async () => {
+		const before = verifyMfa.mock.calls.length;
+		for (const cookie of [
+			`akiba-platform-csrf=${CSRF_TOKEN}`,
+			`akiba-platform-challenge=v1.${CHALLENGE_TOKEN}.forged; akiba-platform-csrf=${CSRF_TOKEN}`,
+		]) {
+			await request(requireApplication(application).getHttpServer())
+				.post('/api/v1/platform/auth/mfa/verify')
+				.set('Origin', ADMIN_ORIGIN)
+				.set('Cookie', cookie)
+				.set('x-platform-csrf-token', CSRF_TOKEN)
+				.send({ method: 'totp', totpCode: '123456' })
+				.expect(401);
+		}
+		expect(verifyMfa).toHaveBeenCalledTimes(before);
+	});
+
+	it('clears an invalidated pending cookie and returns safe Problem Details', async () => {
+		verifyMfa.mockRejectedValueOnce(new PlatformMfaRejectedException(true));
+		const response = await request(requireApplication(application).getHttpServer())
+			.post('/api/v1/platform/auth/mfa/verify')
+			.set('Origin', ADMIN_ORIGIN)
+			.set('Cookie', pendingCookies)
+			.set('x-platform-csrf-token', CSRF_TOKEN)
+			.send({ method: 'totp', totpCode: '123456' })
+			.expect(401);
+		expect(response.headers['content-type']).toContain('application/problem+json');
+		expect(response.body).toMatchObject({ code: 'AUTH_MFA_INVALID' });
+		expect((response.get('Set-Cookie') ?? []).join(';')).toContain('akiba-platform-challenge=;');
+	});
+
+	it('rejects forged platform authorities and ignores untrusted forwarding headers', async () => {
+		const before = login.mock.calls.length;
+		await request(requireApplication(application).getHttpServer())
+			.post('/api/v1/platform/auth/login')
+			.set('Origin', ADMIN_ORIGIN)
+			.set('Host', 'organization.attacker.example')
+			.set('X-Forwarded-Host', 'localhost:3000')
+			.send({ email: 'admin@example.com', password: 'fictional password' })
+			.expect(403);
+		expect(login).toHaveBeenCalledTimes(before);
+	});
+
+	it('enforces endpoint throttling despite forged client-address headers', async () => {
+		for (let attempt = 0; attempt < 10; attempt += 1) {
+			await request(requireApplication(application).getHttpServer())
+				.post('/api/v1/platform/auth/login')
+				.set('Origin', ADMIN_ORIGIN)
+				.set('X-Forwarded-For', `192.0.2.${attempt + 1}`)
+				.send({ email: 'admin@example.com', password: 'fictional password' })
+				.expect(200);
+		}
+		const response = await request(requireApplication(application).getHttpServer())
+			.post('/api/v1/platform/auth/login')
+			.set('Origin', ADMIN_ORIGIN)
+			.set('X-Forwarded-For', '198.51.100.12')
+			.send({ email: 'admin@example.com', password: 'fictional password' })
+			.expect(429);
+		expect(response.body).toMatchObject({ code: 'RATE_LIMITED' });
 	});
 
 	it('rejects a missing session cookie', async () => {
@@ -266,11 +398,14 @@ describe('platform authentication HTTP API (e2e)', () => {
 		const response = await request(requireApplication(application).getHttpServer())
 			.post('/api/v1/platform/auth/logout')
 			.set('Origin', ADMIN_ORIGIN)
-			.set('Cookie', `akiba-platform-session=${SESSION_TOKEN}; akiba-platform-csrf=${CSRF_TOKEN}`)
+			.set('Cookie', `akiba-platform-session=${SESSION_TOKEN}; ${pendingCookies}`)
 			.set('x-platform-csrf-token', CSRF_TOKEN)
 			.expect(204);
-		expect(revoke).toHaveBeenCalledWith(SESSION_TOKEN);
+		expect(revoke).toHaveBeenCalledWith(SESSION_TOKEN, undefined, expect.any(String));
+		expect(revokeChallenge).toHaveBeenCalledWith(CHALLENGE_TOKEN, undefined, expect.any(String));
 		expect((response.get('Set-Cookie') ?? []).join(';')).toContain('akiba-platform-session=;');
+		expect((response.get('Set-Cookie') ?? []).join(';')).toContain('akiba-platform-challenge=;');
+		expect((response.get('Set-Cookie') ?? []).join(';')).toContain('akiba-platform-csrf=;');
 	});
 });
 
