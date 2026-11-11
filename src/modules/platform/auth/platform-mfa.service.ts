@@ -9,12 +9,22 @@ import { ConfigService } from '@nestjs/config';
 import { PlatformStaffStatus, Prisma, PrismaService } from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
-import { databaseErrorCode } from '../../../common/errors/database-error-code.js';
 import type { PlatformMfaVerifyDto } from './dto/platform-mfa-verify.dto.js';
 import { PLATFORM_AUTH_ERROR } from './platform-auth.constants.js';
 import { PlatformTokenService } from './platform-token.service.js';
 import { PlatformTotpService } from './platform-totp.service.js';
-import { isPlatformSuperadmin } from './platform-permission-policy.js';
+import { effectivePlatformPermissions } from './platform-permission-policy.js';
+import { recordPlatformAuthentication } from './platform-authentication-audit.js';
+
+export type PlatformMfaVerificationInput = PlatformMfaVerifyDto & {
+	readonly challengeToken: string;
+};
+
+export class PlatformMfaRejectedException extends UnauthorizedException {
+	constructor(readonly terminal: boolean) {
+		super(PLATFORM_AUTH_ERROR.invalidChallenge);
+	}
+}
 
 export interface PlatformMfaSuccess {
 	readonly status: 'authenticated';
@@ -24,7 +34,11 @@ export interface PlatformMfaSuccess {
 }
 
 type VerificationOutcome =
-	| { readonly authenticated: false; readonly challengeId: string | null }
+	| {
+			readonly authenticated: false;
+			readonly challengeId: string | null;
+			readonly terminal: boolean;
+	  }
 	| {
 			readonly authenticated: true;
 			readonly challengeId: string;
@@ -38,20 +52,6 @@ class ConcurrentMfaConsumptionError extends Error {
 
 const MFA_TRANSACTION_MAX_WAIT_MS = 8_000;
 const MFA_TRANSACTION_TIMEOUT_MS = 10_000;
-const MFA_PERSISTENCE_ERROR_CODES = new Set([
-	'P1001',
-	'P1002',
-	'P1008',
-	'P1010',
-	'P1017',
-	'P2021',
-	'P2022',
-	'P2024',
-	'P2028',
-	'P2034',
-	'P2037',
-	'P2039',
-]);
 
 @Injectable()
 export class PlatformMfaService {
@@ -78,7 +78,13 @@ export class PlatformMfaService {
 		);
 	}
 
-	async verify(input: PlatformMfaVerifyDto, now = new Date()): Promise<PlatformMfaSuccess> {
+	async verify(
+		input: PlatformMfaVerificationInput,
+		now = new Date(),
+		requestId?: string,
+	): Promise<PlatformMfaSuccess> {
+		if (!/^[A-Za-z0-9_-]{32,256}$/u.test(input.challengeToken))
+			throw new PlatformMfaRejectedException(true);
 		this.assertMethodInput(input);
 		const challengeDigest = this.tokens.digest(input.challengeToken);
 		const sessionToken = this.tokens.createToken();
@@ -103,6 +109,8 @@ export class PlatformMfaService {
 									status: true,
 									user: {
 										select: {
+											id: true,
+											identityVersion: true,
 											status: true,
 											emailVerifiedAt: true,
 											email: true,
@@ -115,7 +123,9 @@ export class PlatformMfaService {
 												select: {
 													key: true,
 													isSystem: true,
-													permissions: { select: { platformPermissionId: true }, take: 1 },
+													permissions: {
+														select: { platformPermission: { select: { key: true } } },
+													},
 												},
 											},
 										},
@@ -147,12 +157,9 @@ export class PlatformMfaService {
 						) ||
 						current.platformStaff.user.passwordCredential?.disabledAt !== null ||
 						current.platformStaff.user.passwordCredential.passwordChangedAt > current.createdAt ||
-						(!isPlatformSuperadmin(current.platformStaff.roles) &&
-							!current.platformStaff.roles.some(
-								({ platformRole }) => platformRole.permissions.length > 0,
-							))
+						effectivePlatformPermissions(current.platformStaff.roles).length === 0
 					) {
-						return { authenticated: false, challengeId: current?.id ?? null };
+						return { authenticated: false, challengeId: current?.id ?? null, terminal: true };
 					}
 					const credential = current.platformStaff.totpCredential;
 					const acceptedTotp =
@@ -191,7 +198,17 @@ export class PlatformMfaService {
 							},
 							data: { failedAttempts: { increment: 1 } },
 						});
-						return { authenticated: false, challengeId: current.id };
+						await recordPlatformAuthentication(
+							transaction,
+							current.platformStaff.user,
+							'platform_mfa_rejected',
+							requestId,
+						);
+						return {
+							authenticated: false,
+							challengeId: current.id,
+							terminal: current.failedAttempts + 1 >= current.maxAttempts,
+						};
 					}
 
 					const consumed = await transaction.platformMfaChallenge.updateMany({
@@ -211,6 +228,7 @@ export class PlatformMfaService {
 					await transaction.platformAdminSession.create({
 						data: {
 							platformStaffId: current.platformStaffId,
+							createdAt: now,
 							tokenDigest: this.tokens.digest(sessionToken),
 							expiresAt,
 							idleExpiresAt: new Date(now.getTime() + this.idleLifetimeMilliseconds),
@@ -218,6 +236,12 @@ export class PlatformMfaService {
 							mfaVerifiedAt: now,
 						},
 					});
+					await recordPlatformAuthentication(
+						transaction,
+						current.platformStaff.user,
+						'platform_session_issued',
+						requestId,
+					);
 					return {
 						authenticated: true,
 						challengeId: current.id,
@@ -226,27 +250,35 @@ export class PlatformMfaService {
 					};
 				},
 				{
-					// Conditional consumes provide concurrency safety without serializable conflicts.
-					isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+					// Include live account and role reads in the atomic authentication decision.
+					isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
 					maxWait: this.transactionMaxWaitMilliseconds,
 					timeout: MFA_TRANSACTION_TIMEOUT_MS,
 				},
 			);
 		} catch (error: unknown) {
 			if (error instanceof ConcurrentMfaConsumptionError) {
-				throw new UnauthorizedException(PLATFORM_AUTH_ERROR.invalidChallenge);
+				throw new PlatformMfaRejectedException(true);
 			}
 			throw this.persistenceFailure(error);
 		}
 
 		if (!outcome.authenticated) {
 			this.logger.warn(
-				JSON.stringify({ event: 'platform_mfa_rejected', challengeId: outcome.challengeId }),
+				JSON.stringify({
+					event: 'platform_mfa_rejected',
+					challengeId: outcome.challengeId,
+					requestId,
+				}),
 			);
-			throw new UnauthorizedException(PLATFORM_AUTH_ERROR.invalidChallenge);
+			throw new PlatformMfaRejectedException(outcome.terminal);
 		}
 		this.logger.log(
-			JSON.stringify({ event: 'platform_session_created', staffId: outcome.platformStaffId }),
+			JSON.stringify({
+				event: 'platform_session_created',
+				staffId: outcome.platformStaffId,
+				requestId,
+			}),
 		);
 		return {
 			status: 'authenticated',
@@ -256,18 +288,51 @@ export class PlatformMfaService {
 		};
 	}
 
-	private persistenceFailure(error: unknown): Error {
-		const code = databaseErrorCode(error);
-		if (code !== undefined && MFA_PERSISTENCE_ERROR_CODES.has(code)) {
-			return new ServiceUnavailableException(
-				{
-					code: 'PLATFORM_MFA_UNAVAILABLE',
-					message: 'MFA verification is temporarily unavailable. Start sign-in again.',
+	async revokeChallenge(
+		token: string | undefined,
+		now = new Date(),
+		requestId?: string,
+	): Promise<void> {
+		if (token === undefined || !/^[A-Za-z0-9_-]{32,256}$/u.test(token)) return;
+		try {
+			await this.prisma.$transaction(
+				async (transaction) => {
+					const challenge = await transaction.platformMfaChallenge.findUnique({
+						where: { tokenDigest: this.tokens.digest(token) },
+						select: {
+							id: true,
+							consumedAt: true,
+							platformStaff: { select: { user: { select: { id: true, identityVersion: true } } } },
+						},
+					});
+					if (challenge === null || challenge.consumedAt !== null) return;
+					const revoked = await transaction.platformMfaChallenge.updateMany({
+						where: { id: challenge.id, consumedAt: null },
+						data: { consumedAt: now, emailOtpDigest: null, emailOtpExpiresAt: null },
+					});
+					if (revoked.count === 1)
+						await recordPlatformAuthentication(
+							transaction,
+							challenge.platformStaff.user,
+							'platform_challenge_revoked',
+							requestId,
+						);
 				},
-				{ cause: error },
+				{ maxWait: this.transactionMaxWaitMilliseconds, timeout: MFA_TRANSACTION_TIMEOUT_MS },
 			);
+		} catch (error: unknown) {
+			throw this.persistenceFailure(error);
 		}
-		return error instanceof Error ? error : new Error('Unexpected MFA persistence failure.');
+	}
+
+	private persistenceFailure(error: unknown): Error {
+		return new ServiceUnavailableException(
+			{
+				code: 'PLATFORM_MFA_UNAVAILABLE',
+				message: 'MFA verification is temporarily unavailable. Start sign-in again.',
+			},
+			{ cause: error },
+		);
 	}
 
 	private async consumeFactor(
@@ -365,10 +430,13 @@ export class PlatformMfaService {
 			(input.method === 'totp' &&
 				input.emailOtpCode === undefined &&
 				input.totpCode !== undefined &&
+				/^\d{6}$/u.test(input.totpCode) &&
 				input.recoveryCode === undefined) ||
 			(input.method === 'recovery_code' &&
 				input.emailOtpCode === undefined &&
 				input.recoveryCode !== undefined &&
+				input.recoveryCode.length >= 12 &&
+				input.recoveryCode.length <= 128 &&
 				input.totpCode === undefined);
 		if (!valid) {
 			throw new UnauthorizedException(PLATFORM_AUTH_ERROR.invalidChallenge);
