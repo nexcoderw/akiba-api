@@ -397,14 +397,14 @@ export class OwnerSessionService {
 					(session.membershipId !== null && session.enrollmentChallengeId !== null) ||
 					(session.membershipId !== null &&
 						(session.membership?.id !== session.membershipId ||
-							session.membership?.organization.id !== session.organizationId ||
-							session.membership?.status !== OrganizationMembershipStatus.ACTIVE ||
-							session.membership?.organization.status !== OrganizationStatus.ACTIVE)) ||
+							session.membership.organization.id !== session.organizationId ||
+							session.membership.status !== OrganizationMembershipStatus.ACTIVE ||
+							session.membership.organization.status !== OrganizationStatus.ACTIVE)) ||
 					(session.enrollmentChallengeId !== null &&
 						(session.enrollmentChallenge?.id !== session.enrollmentChallengeId ||
-							session.enrollmentChallenge?.status !== OrganizationOwnerEnrollmentStatus.VERIFIED ||
-							session.enrollmentChallenge?.consumedAt !== null ||
-							(session.enrollmentChallenge?.expiresAt ?? now) <= now)) ||
+							session.enrollmentChallenge.status !== OrganizationOwnerEnrollmentStatus.VERIFIED ||
+							session.enrollmentChallenge.consumedAt !== null ||
+							session.enrollmentChallenge.expiresAt <= now)) ||
 					session.idleExpiresAt <= now ||
 					session.absoluteExpiresAt <= now ||
 					!accountCanAuthenticate(session.user.status, session.user.emailVerifiedAt) ||
