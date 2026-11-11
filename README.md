@@ -163,7 +163,7 @@ other session within the caller's own membership, and atomically replace a full 
 Rotation preserves the original absolute deadline and authentication evidence; the old token is
 revoked in the same transaction. Platform internal methods likewise list and revoke only the
 presenting staff identity's sessions. Existing logout endpoints revoke server-side and clear their
-respective cookie pairs. Credential replacement revokes both contexts; organization role and
+respective authentication cookies. Credential replacement revokes both contexts; organization role and
 membership changes revoke affected organization sessions in the same transaction as the change.
 Unimplemented step-up and new public session-management endpoints remain denied.
 
@@ -173,9 +173,10 @@ for the central API. Same-origin `/api/v1` routing on each tenant hostname is ne
 cookie isolation across simultaneous portals. Do not set a parent-domain privileged cookie.
 The in-process throttle and account attempt stores are insufficient across multiple API replicas;
 shared bounded abuse counters and a reviewed failure policy are required before production sign-in.
-No database RLS policy exists and the Neon-managed owner is not an isolation boundary. Session
-events currently have sanitized application logs, not an append-only atomic session audit table;
-add that before treating remote session management as production complete.
+No database RLS policy exists and the Neon-managed owner is not an isolation boundary. Platform
+primary authentication, MFA outcomes and logout now use the existing append-only identity audit
+table. Organization sessions and internal remote session management still need atomic security
+auditing before being treated as production complete.
 
 ## Global identity and credential foundation
 
@@ -234,8 +235,9 @@ password replacement advances its timestamp and revokes owner sessions, platform
 MFA and enrollment/mailbox proofs in the same transaction. Suspension, disablement and compromise use
 the same invalidation hook. Future MFA reset must invoke it as part of its reviewed workflow; no new
 reset endpoint is implemented. Audit failure rolls back the associated changes. Existing enrollment
-and bootstrap now append real creation/verification events; rehash records an upgrade without revoking
-sessions or pretending the password changed. Identity audit records contain action, actor IDs,
+flows append real creation/verification events; bootstrap records pending identity creation only.
+Rehash records an upgrade without revoking sessions or pretending the password changed.
+Identity audit records contain action, actor IDs,
 versions and request ID, never addresses, hashes, passwords or token material.
 
 PASSWORD_POLICY_VIOLATION, PASSWORD_POLICY_UNAVAILABLE and ACCOUNT_ACTION_UNAVAILABLE use the existing
@@ -252,3 +254,65 @@ gh variable set AKIBA_DB_SOURCE_REVISION --repo nexcoderw/akiba-api --body "$(gi
 
 This is a human-operated configuration command, not an agent action or publication step. The local
 file dependency remains supported; no package version or lockfile was fabricated.
+
+## Platform authentication
+
+The initial owner remains pending because Step 6 has no approved mailbox-proof and credential/MFA
+enrollment flow. These endpoints serve already active, independently verified and enrolled platform
+staff; they cannot activate a pending owner. General MFA enrollment, replacement and recovery
+management remain Step 8. No public platform registration or password reset is added.
+
+Deploy the reviewed DB migration `20261111180000_platform_authentication_audit` before these API
+changes. It expands CHECK constraints on the existing identity audit table without changing the
+Prisma schema or public package types. Audit failure rolls back challenge creation, MFA consumption,
+session issuance or logout rather than returning a success response. Unknown credential failures
+use sanitized operational logs and purpose-separated account digests rather than creating identities.
+Existing identity lifecycle history is retained.
+
+| Endpoint                                | Browser contract                                                                                                                                                                   |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/platform/auth/login`      | Send email/password from the approved admin Origin. Receive `MFA_REQUIRED`, `VERIFY_MFA`, expiry, allowed methods and CSRF proof. The challenge is an HttpOnly cookie, never JSON. |
+| `POST /api/v1/platform/auth/mfa/verify` | Send exactly one existing MFA method/proof and the CSRF header; the server resolves the account from the pending cookie. Never submit a challenge token or identity.               |
+| `POST /api/v1/platform/auth/mfa/email`  | Existing opt-in fallback: pending cookie plus CSRF, no request body or recipient. Existing send cooldowns and quotas remain.                                                       |
+| `GET /api/v1/platform/auth/me`          | Full session required. Returns safe identity, live roles/permissions, expiry and authenticated/MFA flags. `/session` remains an alias.                                             |
+| `POST /api/v1/platform/auth/logout`     | Revoke the presented session and unused pending challenge, then expire all three cookies. Requires Origin and CSRF, including while MFA is pending.                                |
+
+Pending challenges expire within 60–300 seconds (default 300), allow at most the configured attempts
+(default five), and contain only a keyed digest in PostgreSQL. The separate
+`__Host-akiba-platform-challenge` cookie is signed for the configured administrative Origin,
+HttpOnly, Secure in production, SameSite=Strict and host-only. Successful MFA consumes it atomically,
+rejects reused TOTP steps, creates an independent opaque session token and rotates CSRF. Consumed,
+expired and exhausted challenges cannot authenticate; terminal rejection clears the pending cookie.
+Session and challenge tokens are never returned in JSON. Frontends must use credentialed requests
+and keep only the returned CSRF proof, never authentication credentials, in JavaScript state.
+
+Primary credentials, staff eligibility, identity version and declared platform permissions are
+rechecked transactionally before issuing a challenge. Missing, suspended, disabled, unverified,
+organization-only and unprivileged accounts receive the same generic credential failure. Existing
+bounded Argon2id verification and malformed-hash dummy work are reused. Successful passwords also
+consume account/network attempt quotas; there is no success-based counter reset. Capacity exhaustion
+fails admission closed. Trusted client addresses use Express's explicit proxy allowlist.
+
+MFA consumption, live eligibility reads, session issuance and audit persistence use a serializable
+transaction. A serialization conflict returns a safe unavailable response rather than replaying an
+uncertain operation. Session guards recheck account, credential, expiry and live roles on subsequent
+requests. Logout uses conditional revocation, so only an actual change creates a revocation event.
+Revocation that wins before MFA consumption prevents issuance. Logout cannot cancel a completion
+that already committed or an operation already authorized; clients must serialize sign-in and logout.
+
+Platform requests require the exact administrative Origin and an approved API/admin authority.
+Forwarded authorities are used only from configured trusted proxy peers. Credentialed CORS remains
+an explicit allowlist. A central API owns the host-only cookies: these guards enforce authentication
+context, while physical browser cookie isolation on `admin.akiba.com` needs reviewed gateway routing.
+No shared parent-domain cookie is used.
+
+Errors retain `application/problem+json`, server request IDs and safe codes including
+`AUTH_INVALID_CREDENTIALS`, `AUTH_MFA_INVALID`, `AUTH_SESSION_EXPIRED`, `ACCESS_DENIED`,
+`RATE_LIMITED`, `VALIDATION_FAILED` and `SERVICE_UNAVAILABLE`. Login cannot reveal a missing MFA
+setup through a distinct public account-state error.
+
+Deployment remains restricted to a single API instance through
+`PLATFORM_AUTH_SINGLE_INSTANCE=true`; a shared limiter and outage policy are required for replicas.
+Persistent abuse counters across restarts, full MFA management and recovery, live concurrency results,
+and the managed-owner/RLS isolation design remain release prerequisites. Agent verification was
+limited to source inspection and diffs; humans run npm and guarded development database checks.
