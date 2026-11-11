@@ -504,7 +504,7 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
 			'PLATFORM_AUTH_MFA_CHALLENGE_TTL_SECONDS',
 			300,
 			60,
-			900,
+			300,
 		),
 		PLATFORM_AUTH_MFA_MAX_ATTEMPTS: parseInteger(
 			input.PLATFORM_AUTH_MFA_MAX_ATTEMPTS,
