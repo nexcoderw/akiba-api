@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
@@ -28,7 +28,7 @@ export class PlatformLoginAttemptService {
 		this.limit = config.get('PLATFORM_AUTH_LOGIN_ATTEMPT_LIMIT', { infer: true });
 	}
 
-	assertAllowed(ipAddress: string, normalizedEmail: string, now = Date.now()): void {
+	private assertAllowed(ipAddress: string, normalizedEmail: string, now: number): void {
 		const keys = [this.key('ip', ipAddress), this.key('account', normalizedEmail)];
 		for (const key of keys) {
 			const window = this.attempts.get(key);
@@ -44,9 +44,18 @@ export class PlatformLoginAttemptService {
 		}
 	}
 
-	recordFailure(ipAddress: string, normalizedEmail: string, now = Date.now()): void {
+	consume(ipAddress: string, normalizedEmail: string, now = Date.now()): void {
+		this.assertAllowed(ipAddress, normalizedEmail, now);
 		this.prune(now);
-		for (const key of [this.key('ip', ipAddress), this.key('account', normalizedEmail)]) {
+		const keys = [this.key('ip', ipAddress), this.key('account', normalizedEmail)];
+		const newKeys = keys.filter((key) => !this.attempts.has(key)).length;
+		if (this.attempts.size + newKeys > MAXIMUM_TRACKED_KEYS) {
+			throw new ServiceUnavailableException({
+				code: 'PLATFORM_LOGIN_UNAVAILABLE',
+				message: 'Sign-in is temporarily unavailable. Try again.',
+			});
+		}
+		for (const key of keys) {
 			const current = this.attempts.get(key);
 			this.attempts.set(key, {
 				count: current === undefined || current.expiresAt <= now ? 1 : current.count + 1,
@@ -58,17 +67,13 @@ export class PlatformLoginAttemptService {
 		}
 	}
 
-	clearAccount(normalizedEmail: string): void {
-		this.attempts.delete(this.key('account', normalizedEmail));
-	}
-
 	private key(scope: string, value: string): string {
 		return `${scope}:${this.tokens.digest(value)}`;
 	}
 
 	private prune(now: number): void {
 		for (const [key, window] of this.attempts) {
-			if (window.expiresAt <= now || this.attempts.size > MAXIMUM_TRACKED_KEYS) {
+			if (window.expiresAt <= now) {
 				this.attempts.delete(key);
 			}
 		}
