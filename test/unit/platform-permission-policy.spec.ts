@@ -48,4 +48,9 @@ describe('platform superadmin permission policy', () => {
 	it('removes automatic permissions when the trusted owner assignment is removed', () => {
 		expect(effectivePlatformPermissions([])).toEqual([]);
 	});
+	it('rejects undeclared permissions and organization capabilities', () => {
+		expect(
+			effectivePlatformPermissions([role('platform.operator', false, ['*', 'organization.owner'])]),
+		).toEqual([]);
+	});
 });
