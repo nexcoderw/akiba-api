@@ -153,8 +153,11 @@ digest index. Tokens, digests and cookies are never returned by session-listing 
 An owner login creates a session for the single selected active owner membership. A user with
 multiple owner memberships must sign in from a tenant-specific approved portal Origin. Enrollment
 verification instead creates a short-lived provisional session bound to its verified challenge.
-That session can only reach invitation acceptance; acceptance consumes the challenge and clears
-the provisional cookie. The user signs in again to obtain a full membership-bound session.
+That session can only reach invitation acceptance. Password-only provisional sessions now receive
+AUTH_MFA_REQUIRED and cannot activate owner membership. Acceptance requires an AAL2 enrollment
+session plus persisted invitation-bound stepUpVerifiedAt evidence newer than five minutes and not
+in the future. Successful acceptance consumes the challenge and clears the provisional cookie;
+it does not issue an organization session.
 The Step 5 migration revokes all prior unbound owner sessions, so existing browsers must also
 sign in again. Apply the reviewed DB migration and regenerate/build `api/db` before running this API.
 
@@ -428,3 +431,26 @@ not been executed by the agent. First-owner enrollment, managed-owner/BYPASSRLS 
 delivery, secret custody and live concurrency/rollback verification remain release gates. Step 8 is
 partially complete until those checks and the restricted bootstrap enrollment are resolved; Step 9
 development may proceed without activating customer or production authentication flows.
+
+## Step 9 audit gate
+
+The Step 9 audit found that the legacy acceptance service assigned active protected ownership from
+AAL1 password authentication with no required owner MFA evidence. The service now denies that path
+before any write and requires both AAL2 and a recent persisted enrollment step-up timestamp. Existing
+unit success fixtures represent future trusted AAL2 evidence; they do not establish a working MFA
+enrollment flow. The current enrollment service still issues only restricted AAL1 proof sessions and
+does not write stepUpVerifiedAt. Therefore legitimate owner activation is blocked until an actual
+organization-owner factor enrollment/verification flow supplies the required evidence. Never stamp
+the timestamp on password success, promote assurance manually or reuse platform TOTP records.
+Pending invitations remain pending on this rejection; no ownership, invitation consumption or full
+organization session is created by acceptance.
+
+Dependent Step 9 implementation stops at this critical gate. Existing organization registration,
+lifecycle, invitation and delivery services are retained, but do not constitute the requested complete
+approval/onboarding milestone. The schema still lacks a distinct reviewed organization approval
+contract and activation readiness checks. Legacy activation endpoints must not be enabled for customer
+onboarding on the assumption that this audit supplies those missing checks. Production remains blocked
+by managed-owner/RLS limitations, owner MFA and approval prerequisites, unverified migrations,
+notification operations and DNS/TLS/reverse-proxy deployment. No database migration, role, external
+resource or production state was changed during this audit. New regression tests and all live database
+guarantees remain unverified until human checks provide results.
