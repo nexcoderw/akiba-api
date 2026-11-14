@@ -86,6 +86,7 @@ describe('PlatformLoginService', () => {
 			passwordCredential: { passwordHash: 'approved-hash', normalization: 'raw', disabledAt: null },
 			platformStaff: {
 				id: 'staff-id',
+				mfaVersion: 1,
 				status: PlatformStaffStatus.ACTIVE,
 				roles: [{ platformRole: { key: 'platform.owner', isSystem: true, permissions: [] } }],
 				totpCredential: {
@@ -143,6 +144,7 @@ describe('PlatformLoginService', () => {
 				},
 				platformStaff: {
 					id: 'staff-id',
+					mfaVersion: 1,
 					status: PlatformStaffStatus.ACTIVE,
 					roles: [{ platformRole: { key: 'platform.owner', isSystem: true, permissions: [] } }],
 					totpCredential: {
@@ -202,6 +204,7 @@ describe('PlatformLoginService', () => {
 			passwordCredential: { passwordHash: 'approved-hash', normalization: 'raw', disabledAt: null },
 			platformStaff: {
 				id: 'staff-id',
+				mfaVersion: 1,
 				status: PlatformStaffStatus.ACTIVE,
 				roles: [{ platformRole: { key: 'platform.owner', isSystem: true, permissions: [] } }],
 				totpCredential: null,
@@ -284,6 +287,7 @@ function eligibleIdentity() {
 		passwordCredential: { passwordHash: 'approved-hash', normalization: 'raw', disabledAt: null },
 		platformStaff: {
 			id: 'staff-id',
+			mfaVersion: 1,
 			status: PlatformStaffStatus.ACTIVE,
 			roles: [{ platformRole: { key: 'platform.owner', isSystem: true, permissions: [] } }],
 			totpCredential: { verifiedAt: new Date('2029-01-01T00:00:00.000Z'), disabledAt: null },
