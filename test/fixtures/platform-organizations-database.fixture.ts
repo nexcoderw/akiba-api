@@ -78,7 +78,10 @@ interface OrganizationSessionFixture {
 	idleExpiresAt: Date;
 	revokedAt: Date | null;
 	mfaVerifiedAt: Date;
+	authenticationMethod: string;
+	mfaVersion: number;
 	platformStaff: {
+		mfaVersion: number;
 		id: string;
 		status: PlatformStaffStatus;
 		user: {
@@ -110,7 +113,10 @@ export function organizationSessionFixture(
 		idleExpiresAt: new Date(now + 1_800_000),
 		revokedAt: null,
 		mfaVerifiedAt: new Date(now - 60_000),
+		authenticationMethod: 'totp',
+		mfaVersion: 1,
 		platformStaff: {
+			mfaVersion: 1,
 			id: '33333333-3333-4333-8333-333333333333',
 			status: PlatformStaffStatus.ACTIVE,
 			user: {
