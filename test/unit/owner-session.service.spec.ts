@@ -16,6 +16,9 @@ describe('OwnerSessionService connection recovery', () => {
 		const client = {
 			$queryRaw: () => Promise.resolve([{ id: userId }]),
 			organizationMembership: { findFirst: () => Promise.resolve({ id: membershipId }) },
+			organizationOwnerEnrollmentChallenge: {
+				findFirst: () => Promise.resolve({ id: 'verified-enrollment' }),
+			},
 			ownerSession: { count: () => Promise.resolve(0), create },
 		};
 		const module = await Test.createTestingModule({
@@ -41,12 +44,18 @@ describe('OwnerSessionService connection recovery', () => {
 			],
 		}).compile();
 		try {
+			await expect(
+				module
+					.get(OwnerSessionService)
+					.create(userId, { organizationId, membershipId }, OwnerSessionAssurance.AAL1),
+			).rejects.toMatchObject({ status: 401 });
+			expect(create).not.toHaveBeenCalled();
 			const result = await module
 				.get(OwnerSessionService)
 				.create(
 					userId,
 					{ organizationId, membershipId },
-					OwnerSessionAssurance.AAL1,
+					OwnerSessionAssurance.AAL2,
 					new Date('2026-01-01T00:00:00.000Z'),
 				);
 			expect(result.token).toBe(token);
@@ -54,6 +63,20 @@ describe('OwnerSessionService connection recovery', () => {
 				data: { userId, organizationId, membershipId, tokenDigest: 'digest' },
 			});
 			expect(JSON.stringify(create.mock.calls)).not.toContain(token);
+			await module
+				.get(OwnerSessionService)
+				.create(
+					userId,
+					{ organizationId, enrollmentChallengeId: 'verified-enrollment' },
+					OwnerSessionAssurance.AAL1,
+				);
+			expect(create.mock.calls[1]?.[0]).toMatchObject({
+				data: {
+					membershipId: null,
+					enrollmentChallengeId: 'verified-enrollment',
+					assurance: 'AAL1',
+				},
+			});
 		} finally {
 			await module.close();
 		}
@@ -67,7 +90,7 @@ describe('OwnerSessionService connection recovery', () => {
 				findUnique: () =>
 					Promise.resolve({
 						authenticatedAt: new Date('2026-01-01T00:00:00.000Z'),
-						mfaVerifiedAt: null,
+						mfaVerifiedAt: new Date('2026-01-01T00:00:00.000Z'),
 						absoluteExpiresAt: new Date('2026-01-02T08:00:00.000Z'),
 					}),
 				updateMany: () => {
@@ -107,7 +130,7 @@ describe('OwnerSessionService connection recovery', () => {
 				userId: '55555555-5555-4555-8555-555555555555',
 				displayName: 'Fictional Owner',
 				email: 'owner@example.test',
-				assurance: 'AAL1',
+				assurance: 'AAL2',
 				expiresAt: new Date('2026-01-02T08:00:00.000Z'),
 				organizations: [
 					{
@@ -146,7 +169,8 @@ describe('OwnerSessionService connection recovery', () => {
 			membershipId,
 			enrollmentChallengeId: null,
 			enrollmentChallenge: null,
-			assurance: OwnerSessionAssurance.AAL1,
+			assurance: OwnerSessionAssurance.AAL2,
+			mfaVerifiedAt: new Date('2026-01-01T00:00:00.000Z'),
 			authenticatedAt: new Date('2026-01-01T00:00:00.000Z'),
 			idleExpiresAt: new Date('2026-01-02T00:20:00.000Z'),
 			absoluteExpiresAt: new Date('2026-01-02T08:00:00.000Z'),
@@ -174,7 +198,8 @@ describe('OwnerSessionService connection recovery', () => {
 				},
 			},
 		};
-		const client = { ownerSession: { findUnique: () => Promise.resolve(row), updateMany } };
+		const findUnique = jest.fn<() => Promise<unknown>>().mockResolvedValue(row);
+		const client = { ownerSession: { findUnique, updateMany } };
 		const module = await Test.createTestingModule({
 			providers: [
 				OwnerSessionService,
@@ -204,6 +229,21 @@ describe('OwnerSessionService connection recovery', () => {
 			expect(updateMany.mock.calls[updateMany.mock.calls.length - 1]?.[0]).toMatchObject({
 				where: { id: selectedId, userId: row.user.id, organizationId, membershipId },
 			});
+			for (const invalid of [
+				{ assurance: OwnerSessionAssurance.AAL1 },
+				{ mfaVerifiedAt: null },
+				{ mfaVerifiedAt: new Date(now.getTime() + 1) },
+				{ mfaVerifiedAt: new Date('2025-01-01T00:00:00.000Z') },
+			]) {
+				findUnique.mockResolvedValue({ ...row, ...invalid });
+				await expect(service.authenticate('opaque-token', now)).rejects.toMatchObject({
+					status: 401,
+				});
+				expect(updateMany.mock.calls[updateMany.mock.calls.length - 1]?.[0]).toMatchObject({
+					where: { id: sessionId, revokedAt: null },
+					data: { revocationReason: 'invalidated' },
+				});
+			}
 		} finally {
 			await module.close();
 		}
@@ -236,7 +276,7 @@ describe('OwnerSessionService connection recovery', () => {
 					organizationId: '22222222-2222-4222-8222-222222222222',
 					membershipId: '33333333-3333-4333-8333-333333333333',
 				},
-				OwnerSessionAssurance.AAL1,
+				OwnerSessionAssurance.AAL2,
 			);
 			await expect(issue).rejects.toMatchObject({ status: 401 });
 			expect(create).not.toHaveBeenCalled();
