@@ -148,6 +148,7 @@ describe('PlatformEmailOtpService', () => {
 function challenge() {
 	return {
 		id: 'challenge-id',
+		purpose: 'login',
 		createdAt: new Date('2030-01-01T00:00:00.000Z'),
 		consumedAt: null,
 		expiresAt: new Date('2030-01-01T00:05:00.000Z'),
