@@ -33,7 +33,8 @@ export const ORGANIZATION_RESERVED_SLUGS = Object.freeze([
 	'bootstrap',
 ]);
 
-const ORGANIZATION_SLUG_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
+// JavaScript's $ also matches before a final line terminator; require the absolute end.
+const ORGANIZATION_SLUG_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?![\s\S])/u;
 
 export function isOrganizationSlug(value: string): boolean {
 	return (
