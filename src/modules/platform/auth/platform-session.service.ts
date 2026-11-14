@@ -47,6 +47,18 @@ export class PlatformSessionService {
 	}
 
 	async authenticate(token: string, now = new Date()): Promise<PlatformPrincipal> {
+		return this.establish(token, now, false);
+	}
+
+	async authenticateForMfaManagement(token: string, now = new Date()): Promise<PlatformPrincipal> {
+		return this.establish(token, now, true);
+	}
+
+	private async establish(
+		token: string,
+		now: Date,
+		allowRecovery: boolean,
+	): Promise<PlatformPrincipal> {
 		const tokenDigest = this.tokens.digest(token);
 		const startedAt = performance.now();
 		for (let attempt = 0; attempt < AUTHENTICATION_MAX_ATTEMPTS; attempt += 1) {
@@ -65,6 +77,7 @@ export class PlatformSessionService {
 					tokenDigest,
 					attempt === 0 ? now : new Date(now.getTime() + elapsed),
 					{ maxWait, timeout },
+					allowRecovery,
 				);
 				Object.freeze(principal.roles);
 				Object.freeze(principal.permissions);
@@ -133,6 +146,7 @@ export class PlatformSessionService {
 		tokenDigest: string,
 		now: Date,
 		budget: { readonly maxWait: number; readonly timeout: number },
+		allowRecovery = false,
 	): Promise<PlatformPrincipal> {
 		const principal = await this.prisma.$transaction(
 			async (transaction): Promise<PlatformPrincipal | null> => {
@@ -140,6 +154,8 @@ export class PlatformSessionService {
 					where: { tokenDigest },
 					select: {
 						id: true,
+						authenticationMethod: true,
+						mfaVersion: true,
 						createdAt: true,
 						expiresAt: true,
 						idleExpiresAt: true,
@@ -148,6 +164,7 @@ export class PlatformSessionService {
 						platformStaff: {
 							select: {
 								id: true,
+								mfaVersion: true,
 								status: true,
 								user: {
 									select: {
@@ -187,7 +204,12 @@ export class PlatformSessionService {
 				const passwordChangedAt = session.platformStaff.user.passwordCredential?.passwordChangedAt;
 				const roles = session.platformStaff.roles.map(({ platformRole }) => platformRole.key);
 				const permissions = effectivePlatformPermissions(session.platformStaff.roles);
+				const methodAllowed =
+					session.authenticationMethod === 'totp' ||
+					(allowRecovery && session.authenticationMethod === 'recovery_code');
 				const invalid =
+					!methodAllowed ||
+					session.mfaVersion !== session.platformStaff.mfaVersion ||
 					session.revokedAt !== null ||
 					session.expiresAt <= now ||
 					session.idleExpiresAt <= now ||
@@ -202,7 +224,7 @@ export class PlatformSessionService {
 					passwordChangedAt > session.createdAt ||
 					permissions.length === 0;
 				if (invalid) {
-					if (session.revokedAt === null) {
+					if (session.revokedAt === null && methodAllowed) {
 						const reason =
 							session.idleExpiresAt <= now || session.expiresAt <= now ? 'expired' : 'invalidated';
 						await transaction.platformAdminSession.updateMany({
@@ -235,6 +257,7 @@ export class PlatformSessionService {
 				}
 
 				return {
+					authenticationMethod: session.authenticationMethod,
 					sessionId: session.id,
 					userId: session.platformStaff.user.id,
 					platformStaffId: session.platformStaff.id,
