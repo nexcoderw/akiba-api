@@ -9,12 +9,14 @@ import { OrganizationTenantGuard } from '../../modules/owner/tenant/organization
 import { PlatformOriginCsrfGuard } from '../../modules/platform/auth/platform-origin-csrf.guard.js';
 import { PlatformPermissionGuard } from '../../modules/platform/auth/platform-permission.guard.js';
 import { PlatformSessionGuard } from '../../modules/platform/auth/platform-session.guard.js';
+import { PlatformMfaManagementGuard } from '../../modules/platform/mfa/platform-mfa-management.guard.js';
 import { ApiProblemException } from '../errors/api-problem.exception.js';
 import { ROUTE_ACCESS, type RouteAccess } from './route-access.decorator.js';
 
 const REQUIRED: Readonly<Record<Exclude<RouteAccess, 'public'>, readonly object[]>> = {
 	platform: [PlatformOriginCsrfGuard, PlatformSessionGuard, PlatformPermissionGuard],
 	'platform-session': [PlatformOriginCsrfGuard, PlatformSessionGuard],
+	'platform-mfa': [PlatformOriginCsrfGuard, PlatformMfaManagementGuard],
 	'owner-session': [OwnerOriginCsrfGuard, OwnerSessionGuard],
 	'owner-enrollment': [OwnerOriginCsrfGuard, OwnerEnrollmentSessionGuard],
 	organization: [OwnerOriginCsrfGuard, OrganizationTenantGuard],
