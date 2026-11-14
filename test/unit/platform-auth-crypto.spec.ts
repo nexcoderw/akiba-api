@@ -51,6 +51,19 @@ describe('platform authentication cryptography', () => {
 		expect(tokens.equal(first, second)).toBe(false);
 	});
 
+	it('generates ten independent 128-bit recovery values with purpose-separated keyed verifiers', () => {
+		const tokens = new PlatformTokenService(config);
+		const codes = tokens.createRecoveryCodes();
+		expect(codes).toHaveLength(10);
+		expect(new Set([...codes, ...tokens.createRecoveryCodes()]).size).toBe(20);
+		for (const code of codes) {
+			expect(code).toMatch(/^(?:[A-F0-9]{4}-){7}[A-F0-9]{4}$/u);
+			expect(tokens.recoveryCodeDigest(code)).toHaveLength(64);
+			expect(tokens.recoveryCodeDigest(code)).not.toBe(tokens.digest(code));
+			expect(tokens.recoveryCodeDigest(code.toLowerCase())).toBe(tokens.recoveryCodeDigest(code));
+		}
+	});
+
 	it('binds email OTP digests to one challenge and verified mailbox', () => {
 		const tokens = new PlatformTokenService(config);
 		const digest = tokens.emailOtpDigest('challenge-a', 'admin@example.com', '012345');
@@ -102,6 +115,7 @@ describe('platform authentication cryptography', () => {
 		const staffId = 'a652ac64-47b5-499e-a849-dca02166c46b';
 		const totpService = new PlatformTotpService(config);
 		const enrollment = totpService.createEnrollment(staffId, 'owner@example.com');
+		const otherEnrollment = totpService.createEnrollment(staffId, 'owner@example.com');
 		const now = new Date('2030-01-01T00:00:00.000Z');
 		const token = new OTPAuth.TOTP({
 			algorithm: 'SHA1',
@@ -111,8 +125,22 @@ describe('platform authentication cryptography', () => {
 		}).generate({ timestamp: now.getTime() });
 
 		expect(enrollment.enrollmentUri).toContain('otpauth://totp/');
+		expect(enrollment.enrollmentUri).toContain('issuer=Akiba');
+		expect(enrollment.secret).toMatch(/^[A-Z2-7]{32}$/u);
+		expect(enrollment.secret).not.toBe(otherEnrollment.secret);
+		expect(enrollment.initializationVector).toHaveLength(12);
+		expect(Buffer.from(enrollment.encryptedSecret).toString('utf8')).not.toContain(
+			enrollment.secret,
+		);
 		expect(totpService.verify(enrollment, token, now)).toEqual({
 			timeStep: BigInt(Math.floor(now.getTime() / 30_000)),
 		});
+		expect(
+			totpService.verify({ ...enrollment, platformStaffId: 'different-staff' }, token, now),
+		).toBeNull();
+		expect(
+			totpService.verify({ ...enrollment, authenticationTag: Buffer.alloc(16) }, token, now),
+		).toBeNull();
+		expect(totpService.verify(enrollment, token, new Date(now.getTime() + 90_000))).toBeNull();
 	});
 });
