@@ -9,7 +9,6 @@ import {
 
 import { ApiProblemException } from '../../../common/errors/api-problem.exception.js';
 import {
-	OWNER_ONLY_ORGANIZATION_PERMISSIONS,
 	effectiveOrganizationPermissions,
 	isOrganizationPermission,
 	type OrganizationPermission,
@@ -102,7 +101,11 @@ export class OrganizationAuthorizationService {
 		if (
 			credential.disabledAt !== null ||
 			credential.passwordChangedAt > session.authenticatedAt ||
-			session.assurance !== context.assurance
+			session.assurance !== context.assurance ||
+			session.assurance !== 'AAL2' ||
+			session.mfaVerifiedAt === null ||
+			session.mfaVerifiedAt > now ||
+			session.mfaVerifiedAt < session.authenticatedAt
 		)
 			throw new ApiProblemException('UNAUTHENTICATED');
 		const membership = await transaction.organizationMembership.findFirst({
@@ -133,10 +136,6 @@ export class OrganizationAuthorizationService {
 			},
 		});
 		if (membership === null) throw new ApiProblemException('ORGANIZATION_ACCESS_DENIED');
-		const grants = new Set(effectiveOrganizationPermissions(membership.roles));
-		if (session.assurance !== 'AAL2' || session.mfaVerifiedAt === null) {
-			for (const permission of OWNER_ONLY_ORGANIZATION_PERMISSIONS) grants.delete(permission);
-		}
-		return grants;
+		return effectiveOrganizationPermissions(membership.roles);
 	}
 }
