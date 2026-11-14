@@ -18,7 +18,7 @@ const context: TenantSecurityContext = Object.freeze({
 	membershipId: MEMBER,
 	userId: USER,
 	sessionId: SESSION,
-	assurance: 'AAL1',
+	assurance: 'AAL2',
 	expiresAt: Date.now() + 60_000,
 	requestId: 'req_55555555-5555-4555-8555-555555555555',
 	resourceScope: { organizationId: A, branchIds: [] },
@@ -59,8 +59,8 @@ describe('organization authorization', () => {
 	it('rechecks the current session and selected membership on every evaluation', async () => {
 		const session = jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({
 			authenticatedAt: new Date('2026-01-01'),
-			assurance: 'AAL1',
-			mfaVerifiedAt: null,
+			assurance: 'AAL2',
+			mfaVerifiedAt: new Date('2026-01-01'),
 			user: { passwordCredential: { disabledAt: null, passwordChangedAt: new Date('2025-01-01') } },
 		});
 		const membership = jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({
@@ -84,7 +84,7 @@ describe('organization authorization', () => {
 		membership.mockResolvedValue({ roles: [role('owner', true, true, [])] });
 		const ownerGrants = await service.effectiveInTransaction(client, context);
 		expect(ownerGrants.has(ORGANIZATION_PERMISSION.membersRead)).toBe(true);
-		expect(ownerGrants.has(ORGANIZATION_PERMISSION.rolesSystem)).toBe(false);
+		expect(ownerGrants.has(ORGANIZATION_PERMISSION.rolesSystem)).toBe(true);
 		membership.mockResolvedValue(null);
 		await expect(service.effectiveInTransaction(client, context)).rejects.toMatchObject({
 			publicCode: 'ORGANIZATION_ACCESS_DENIED',
@@ -98,6 +98,39 @@ describe('organization authorization', () => {
 			},
 		});
 	});
+
+	it.each([
+		{ assurance: 'AAL1' as const, mfaVerifiedAt: new Date('2026-01-01') },
+		{ assurance: 'AAL2' as const, mfaVerifiedAt: null },
+		{ assurance: 'AAL2' as const, mfaVerifiedAt: new Date(Date.now() + 60_000) },
+		{ assurance: 'AAL2' as const, mfaVerifiedAt: new Date('2025-01-01') },
+	])(
+		'denies insufficient stored assurance before reading any membership grants: %p',
+		async (state) => {
+			const session = jest.fn<() => Promise<unknown>>().mockResolvedValue({
+				...state,
+				authenticatedAt: new Date('2026-01-01'),
+				user: {
+					passwordCredential: { disabledAt: null, passwordChangedAt: new Date('2025-01-01') },
+				},
+			});
+			const membership = jest.fn<() => Promise<unknown>>();
+			const service = new OrganizationAuthorizationService(
+				{ assert: jest.fn() } as unknown as ConstructorParameters<
+					typeof OrganizationAuthorizationService
+				>[0],
+				{} as ConstructorParameters<typeof OrganizationAuthorizationService>[1],
+			);
+			const client = {
+				ownerSession: { findFirst: session },
+				organizationMembership: { findFirst: membership },
+			} as unknown as Parameters<typeof service.effectiveInTransaction>[0];
+			await expect(
+				service.effectiveInTransaction(client, { ...context, assurance: state.assurance }),
+			).rejects.toMatchObject({ publicCode: 'UNAUTHENTICATED' });
+			expect(membership).not.toHaveBeenCalled();
+		},
+	);
 
 	it('denies unknown permissions and unverified branch scope', async () => {
 		const run = async (_scope: unknown, operation: (transaction: unknown) => Promise<unknown>) =>
