@@ -6,6 +6,21 @@ export interface ProblemDefinition {
 }
 
 const core = {
+	AUTH_REAUTHENTICATION_REQUIRED: {
+		status: 403,
+		title: 'Security verification required',
+		detail: 'Verify your current credentials and an approved factor for this action.',
+	},
+	AUTH_MFA_FACTOR_CHANGE_DENIED: {
+		status: 409,
+		title: 'Authenticator change unavailable',
+		detail: 'This change cannot be completed while preserving the required MFA protection.',
+	},
+	AUTH_MFA_FACTOR_NOT_FOUND: {
+		status: 404,
+		title: 'Authenticator unavailable',
+		detail: 'The requested authenticator is unavailable.',
+	},
 	PASSWORD_POLICY_VIOLATION: {
 		status: 400,
 		title: 'Choose a stronger password',
@@ -219,7 +234,7 @@ export function isApiErrorCode(value: unknown): value is ApiErrorCode {
 	return typeof value === 'string' && Object.hasOwn(PROBLEM_CATALOG, value);
 }
 
-/** Reserved contracts do not indicate implemented recovery or MFA-enrollment workflows. */
+/** Stable authentication contracts; individual codes do not imply an unrestricted recovery flow. */
 export const RESERVED_AUTH_ERROR_CODES = Object.freeze([
 	'AUTH_INVALID_CREDENTIALS',
 	'AUTH_SESSION_EXPIRED',
