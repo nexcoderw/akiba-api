@@ -179,13 +179,11 @@ describe('platform MFA management security boundary', () => {
 					provide: PlatformTotpService,
 					useValue: {
 						verify: verifyTotp,
-						createEnrollment: jest
-							.fn<() => unknown>()
-							.mockReturnValue({
-								...factor(),
-								secret: 'JBSWY3DPEHPK3PXP',
-								enrollmentUri: 'otpauth://totp/Akiba:owner',
-							}),
+						createEnrollment: jest.fn<() => unknown>().mockReturnValue({
+							...factor(),
+							secret: 'JBSWY3DPEHPK3PXP',
+							enrollmentUri: 'otpauth://totp/Akiba:owner',
+						}),
 					},
 				},
 			],
