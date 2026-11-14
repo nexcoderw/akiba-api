@@ -14,9 +14,12 @@ import { PlatformSessionGuard } from './platform-session.guard.js';
 import { PlatformSessionService } from './platform-session.service.js';
 import { PlatformTokenService } from './platform-token.service.js';
 import { PlatformTotpService } from './platform-totp.service.js';
+import { PlatformMfaManagementController } from '../mfa/platform-mfa-management.controller.js';
+import { PlatformMfaManagementGuard } from '../mfa/platform-mfa-management.guard.js';
+import { PlatformMfaManagementService } from '../mfa/platform-mfa-management.service.js';
 
 @Module({
-	controllers: [PlatformAuthController],
+	controllers: [PlatformAuthController, PlatformMfaManagementController],
 	providers: [
 		ResendEmailService,
 		PlatformEmailOtpService,
@@ -31,6 +34,8 @@ import { PlatformTotpService } from './platform-totp.service.js';
 		PlatformSessionService,
 		PlatformTokenService,
 		PlatformTotpService,
+		PlatformMfaManagementGuard,
+		PlatformMfaManagementService,
 	],
 	// Nest instantiates controller guards in the consuming feature's module context.
 	exports: [
