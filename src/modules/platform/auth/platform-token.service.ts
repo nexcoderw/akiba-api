@@ -24,6 +24,19 @@ export class PlatformTokenService {
 		return createHmac('sha256', this.pepper).update(token, 'utf8').digest('hex');
 	}
 
+	recoveryCodeDigest(code: string): string {
+		return this.digest(JSON.stringify(['platform-recovery-code-v2', code.trim().toUpperCase()]));
+	}
+
+	createRecoveryCodes(): string[] {
+		return Array.from({ length: 10 }, () =>
+			randomBytes(16)
+				.toString('hex')
+				.toUpperCase()
+				.replace(/.{4}(?=.)/gu, '$&-'),
+		);
+	}
+
 	/** Bind low-entropy codes to one challenge and mailbox with the managed secret pepper. */
 	emailOtpDigest(challengeId: string, email: string, code: string): string {
 		return this.digest(
