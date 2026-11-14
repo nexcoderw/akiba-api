@@ -305,7 +305,7 @@ export class PlatformMfaService {
 							platformStaff: { select: { user: { select: { id: true, identityVersion: true } } } },
 						},
 					});
-					if (challenge === null || challenge.consumedAt !== null) return;
+					if (challenge?.consumedAt !== null) return;
 					const revoked = await transaction.platformMfaChallenge.updateMany({
 						where: { id: challenge.id, consumedAt: null },
 						data: { consumedAt: now, emailOtpDigest: null, emailOtpExpiresAt: null },
