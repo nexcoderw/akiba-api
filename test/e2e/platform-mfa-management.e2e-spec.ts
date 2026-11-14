@@ -150,6 +150,11 @@ describe('platform MFA management HTTP security', () => {
 
 	it('requires both the exact admin Origin and CSRF', async () => {
 		await request(app.getHttpServer())
+			.get('/api/v1/platform/auth/mfa/factors')
+			.set('Origin', ORIGIN)
+			.set('Cookie', COOKIE)
+			.expect(403);
+		await request(app.getHttpServer())
 			.post('/api/v1/platform/auth/step-up/verify')
 			.set('Origin', ORIGIN)
 			.set('Cookie', operationCookie)
@@ -188,8 +193,8 @@ describe('platform MFA management HTTP security', () => {
 		expect(response.get('Cache-Control')).toBe('no-store');
 		expect(response.body).toMatchObject({
 			code: 'AUTH_REAUTHENTICATION_REQUIRED',
-			requestId: expect.stringMatching(/^req_/u),
 		});
+		expect(response.body).toHaveProperty('requestId', expect.stringMatching(/^req_/u));
 		expect(JSON.stringify(response.body)).not.toMatch(/Prisma|SELECT|stack|passwordHash/u);
 		expect(enroll).not.toHaveBeenCalled();
 	});
