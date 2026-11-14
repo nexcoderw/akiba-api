@@ -56,6 +56,7 @@ describe('validateEnvironment', () => {
 			PLATFORM_AUTH_LOGIN_ATTEMPT_LIMIT: 5,
 			PLATFORM_AUTH_SINGLE_INSTANCE: true,
 			PLATFORM_AUTH_EMAIL_OTP_ENABLED: false,
+			PLATFORM_MFA_MANAGEMENT_ENABLED: false,
 			ORGANIZATION_PORTAL_ORIGIN: 'http://localhost:4001',
 			ORGANIZATION_PORTAL_BASE_DOMAIN: null,
 			OWNER_AUTH_COOKIE_SECURE: false,
@@ -96,6 +97,39 @@ describe('validateEnvironment', () => {
 				RESEND_API_KEY: 're_fictional',
 				RESEND_FROM_EMAIL: 'security@example.com',
 			}).PLATFORM_AUTH_EMAIL_OTP_ENABLED,
+		).toBe(true);
+	});
+
+	it('requires a security delivery provider when MFA management is enabled', () => {
+		expect(() =>
+			validateEnvironment({ NODE_ENV: 'test', PLATFORM_MFA_MANAGEMENT_ENABLED: 'true' }),
+		).toThrow('RESEND_API_KEY');
+	});
+
+	it('rejects local and shared encryption keys before enabling live MFA management', () => {
+		const input = {
+			NODE_ENV: 'development',
+			PLATFORM_MFA_MANAGEMENT_ENABLED: 'true',
+			DATABASE_URL:
+				'postgresql://neondb_owner:fictional@development.example.com/neondb?sslmode=verify-full',
+			RESEND_API_KEY: 're_fictional',
+			RESEND_FROM_EMAIL: 'security@example.com',
+		};
+		expect(() => validateEnvironment(input)).toThrow('independent');
+		const shared = Buffer.alloc(32, 1).toString('base64');
+		expect(() =>
+			validateEnvironment({
+				...input,
+				PLATFORM_AUTH_TOKEN_PEPPER: shared,
+				PLATFORM_TOTP_KEYRING: `local-v1=${shared}`,
+			}),
+		).toThrow('independent');
+		expect(
+			validateEnvironment({
+				...input,
+				PLATFORM_AUTH_TOKEN_PEPPER: shared,
+				PLATFORM_TOTP_KEYRING: `local-v1=${Buffer.alloc(32, 2).toString('base64')}`,
+			}).PLATFORM_MFA_MANAGEMENT_ENABLED,
 		).toBe(true);
 	});
 
