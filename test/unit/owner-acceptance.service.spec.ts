@@ -20,13 +20,45 @@ const PRINCIPAL: OwnerPrincipal = {
 	userId: 'user',
 	displayName: 'Example Owner',
 	email: 'owner@example.test',
-	assurance: 'AAL1',
+	assurance: 'AAL2',
 	expiresAt: EXPIRES_AT,
 	enrollmentChallengeId: 'challenge',
 	organizations: [],
 };
 
 describe('OwnerAcceptanceService', () => {
+	it('denies password-only ownership activation before any database operation', async () => {
+		const harness = await createHarness();
+		try {
+			await expect(
+				harness.service.accept({ ...PRINCIPAL, assurance: 'AAL1' }, 'token', 'request', NOW),
+			).rejects.toMatchObject({ publicCode: 'AUTH_MFA_REQUIRED' });
+			expect(harness.transaction.$queryRaw).not.toHaveBeenCalled();
+			expect(harness.writes).toEqual([]);
+		} finally {
+			await harness.module.close();
+		}
+	});
+
+	it.each([null, new Date(NOW.getTime() + 1), new Date(NOW.getTime() - 300_000)])(
+		'denies missing, future or stale persisted enrollment MFA proof: %p',
+		async (stepUpVerifiedAt) => {
+			const harness = await createHarness({
+				challenge: { ...challengeFixture(), stepUpVerifiedAt },
+			});
+			try {
+				await expect(
+					harness.service.accept(PRINCIPAL, 'token', 'request', NOW),
+				).rejects.toMatchObject({ publicCode: 'AUTH_MFA_REQUIRED' });
+				expect(harness.transaction.organizationMembership.create).not.toHaveBeenCalled();
+				expect(harness.transaction.organizationMembershipRole.upsert).not.toHaveBeenCalled();
+				expect(harness.writes).toEqual([]);
+			} finally {
+				await harness.module.close();
+			}
+		},
+	);
+
 	it.each([1, 0])('consumes proof before acceptance with update count %s', async (count) => {
 		const harness = await createHarness({ challengeUpdateCount: count });
 		try {
@@ -156,6 +188,7 @@ describe('OwnerAcceptanceService', () => {
 });
 
 interface ChallengeFixture {
+	stepUpVerifiedAt: Date | null;
 	id: string;
 	organizationId: string;
 	ownerInvitationId: string;
@@ -185,6 +218,7 @@ interface ChallengeFixture {
 
 function challengeFixture(): ChallengeFixture {
 	return {
+		stepUpVerifiedAt: NOW,
 		id: 'challenge',
 		organizationId: 'organization',
 		ownerInvitationId: 'invitation',
