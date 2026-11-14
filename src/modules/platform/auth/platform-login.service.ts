@@ -129,6 +129,7 @@ export class PlatformLoginService {
 						throw new UnauthorizedException(PLATFORM_AUTH_ERROR.invalidCredentials);
 					await transaction.platformMfaChallenge.updateMany({
 						where: {
+							purpose: 'login',
 							platformStaffId: platformStaff.id,
 							consumedAt: null,
 							expiresAt: { gt: now },
@@ -138,6 +139,8 @@ export class PlatformLoginService {
 					await transaction.platformMfaChallenge.create({
 						data: {
 							platformStaffId: platformStaff.id,
+							purpose: 'login',
+							mfaVersion: current.platformStaff.mfaVersion,
 							tokenDigest: this.tokens.digest(challengeToken),
 							// Bind MFA to the password proof's start, not a later insertion time.
 							createdAt: now,
@@ -201,6 +204,7 @@ export class PlatformLoginService {
 					select: {
 						id: true,
 						status: true,
+						mfaVersion: true,
 						roles: {
 							select: {
 								platformRole: {
