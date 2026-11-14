@@ -149,7 +149,7 @@ export class OwnerEnrollmentController {
 	@ApiOperation({
 		summary: 'Atomically accept a verified owner invitation',
 		description:
-			'Consumes the proof and invitation, activates the safe membership, assigns the exact system OWNER role, and records recipient audit evidence in one transaction.',
+			'Requires an AAL2 enrollment session and persisted invitation-bound MFA verification within five minutes. Password-only enrollment returns AUTH_MFA_REQUIRED without activating membership or consuming the invitation. Organization-owner MFA verification is not yet implemented; platform MFA proofs are not accepted. After the prerequisite exists, acceptance commits membership, protected owner assignment and audit atomically.',
 	})
 	@ApiOkResponse({ type: OwnerInvitationAcceptedResponseDto })
 	@ApiUnauthorizedResponse({ type: ApiErrorResponseDto })
