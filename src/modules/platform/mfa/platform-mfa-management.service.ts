@@ -213,10 +213,7 @@ export class PlatformMfaManagementService {
 						valid = updated.count === 1;
 					}
 				}
-			} else if (
-				input.method === 'recovery_code' &&
-				['totp_enroll', 'totp_replace'].includes(this.operation(proof))
-			) {
+			} else if (['totp_enroll', 'totp_replace'].includes(this.operation(proof))) {
 				valid = await consumePlatformRecoveryCode(
 					transaction,
 					this.tokens,
@@ -523,8 +520,7 @@ export class PlatformMfaManagementService {
 					include: SESSION_INCLUDE,
 				});
 				if (
-					session === null ||
-					session.id !== principal.sessionId ||
+					session?.id !== principal.sessionId ||
 					session.platformStaffId !== principal.platformStaffId ||
 					session.platformStaff.user.id !== principal.userId ||
 					session.revokedAt !== null ||
@@ -565,8 +561,7 @@ export class PlatformMfaManagementService {
 			where: { tokenDigest: this.tokens.digest(token) },
 		});
 		if (
-			proof === null ||
-			proof.purpose !== purpose ||
+			proof?.purpose !== purpose ||
 			proof.platformStaffId !== session.platformStaffId ||
 			proof.platformSessionId !== session.id ||
 			proof.consumedAt !== null ||
