@@ -15,6 +15,8 @@ describe('PlatformMfaService', () => {
 	const totpUpdateMany = jest.fn<() => Promise<{ count: number }>>();
 	const recoveryUpdateMany = jest.fn<() => Promise<{ count: number }>>();
 	const sessionCreate = jest.fn<(input: unknown) => Promise<unknown>>();
+	const sessionUpdateMany = jest.fn<() => Promise<{ count: number }>>();
+	const notificationCreate = jest.fn<() => Promise<unknown>>();
 	const auditCreate = jest.fn<(input: unknown) => Promise<unknown>>();
 	const transaction = {
 		platformMfaChallenge: {
@@ -23,7 +25,8 @@ describe('PlatformMfaService', () => {
 		},
 		platformTotpCredential: { updateMany: totpUpdateMany },
 		platformRecoveryCode: { updateMany: recoveryUpdateMany },
-		platformAdminSession: { create: sessionCreate },
+		platformAdminSession: { create: sessionCreate, updateMany: sessionUpdateMany },
+		platformSecurityNotification: { create: notificationCreate },
 		identitySecurityAuditEvent: { create: auditCreate },
 	};
 	type TransactionOperation = (client: typeof transaction) => Promise<unknown>;
@@ -70,6 +73,9 @@ describe('PlatformMfaService', () => {
 						digest: jest
 							.fn<(value: string) => string>()
 							.mockImplementation((value) => `${value}-digest`),
+						recoveryCodeDigest: jest
+							.fn<(value: string) => string>()
+							.mockImplementation((value) => `${value}-recovery-digest`),
 					},
 				},
 				{ provide: PlatformTotpService, useValue: { verify: verifyTotp } },
@@ -85,6 +91,8 @@ describe('PlatformMfaService', () => {
 		totpUpdateMany.mockResolvedValue({ count: 1 });
 		recoveryUpdateMany.mockResolvedValue({ count: 1 });
 		sessionCreate.mockResolvedValue({ id: 'session-id' });
+		sessionUpdateMany.mockResolvedValue({ count: 1 });
+		notificationCreate.mockResolvedValue({ id: 'notification-id' });
 		auditCreate.mockResolvedValue({ id: 'audit-id' });
 		verifyTotp.mockReturnValue({ timeStep: 31_556_952n });
 	});
@@ -205,15 +213,67 @@ describe('PlatformMfaService', () => {
 	});
 
 	it('atomically consumes a single-use recovery code', async () => {
+		const now = new Date('2030-01-01T00:00:00.000Z');
 		await expect(
-			service.verify({
-				challengeToken: 'challenge-token-with-more-than-32-characters',
-				method: 'recovery_code',
-				recoveryCode: 'FICTIONAL-RECOVERY-CODE',
-			}),
-		).resolves.toMatchObject({ status: 'authenticated' });
+			service.verify(
+				{
+					challengeToken: 'challenge-token-with-more-than-32-characters',
+					method: 'recovery_code',
+					recoveryCode: 'ABCD-1234-ABCD-1234-ABCD-1234-ABCD-1234',
+				},
+				now,
+			),
+		).resolves.toMatchObject({ status: 'mfa_recovery_required' });
 		expect(recoveryUpdateMany).toHaveBeenCalledTimes(1);
 		expect(sessionCreate).toHaveBeenCalledTimes(1);
+		expect(sessionCreate.mock.calls[0]?.[0]).toMatchObject({
+			data: {
+				authenticationMethod: 'recovery_code',
+				mfaVersion: 1,
+				expiresAt: new Date(now.getTime() + 300_000),
+			},
+		});
+		expect(sessionUpdateMany).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: { revokedAt: now, revocationReason: 'recovery_used' },
+			}),
+		);
+		expect(recoveryUpdateMany).toHaveBeenCalledWith(
+			expect.objectContaining({ where: expect.objectContaining({ generation: 1, usedAt: null }) }),
+		);
+	});
+
+	it.each([{ purpose: 'step_up' }, { purpose: 'enrollment' }, { mfaVersion: 2 }])(
+		'never uses management or stale authority as a login challenge: %p',
+		async (state) => {
+			challengeFindUnique.mockResolvedValue({ ...createChallenge(), ...state });
+			await expect(
+				service.verify(
+					{
+						challengeToken: 'challenge-token-with-more-than-32-characters',
+						method: 'totp',
+						totpCode: '123456',
+					},
+					new Date('2030-01-01T00:00:00.000Z'),
+				),
+			).rejects.toMatchObject({ status: 401 });
+			expect(sessionCreate).not.toHaveBeenCalled();
+		},
+	);
+
+	it('does not issue a second recovery session when the atomic code consumption loses', async () => {
+		recoveryUpdateMany.mockResolvedValueOnce({ count: 0 });
+		await expect(
+			service.verify(
+				{
+					challengeToken: 'challenge-token-with-more-than-32-characters',
+					method: 'recovery_code',
+					recoveryCode: 'ABCD-1234-ABCD-1234-ABCD-1234-ABCD-1234',
+				},
+				new Date('2030-01-01T00:00:00.000Z'),
+			),
+		).rejects.toMatchObject({ status: 401 });
+		expect(sessionCreate).not.toHaveBeenCalled();
 	});
 
 	it('atomically clears an email OTP and consumes its challenge before issuing a session', async () => {
@@ -226,7 +286,7 @@ describe('PlatformMfaService', () => {
 				},
 				new Date('2030-01-01T00:00:00.000Z'),
 			),
-		).resolves.toMatchObject({ status: 'authenticated' });
+		).resolves.toMatchObject({ status: 'mfa_recovery_required' });
 		expect(challengeUpdateMany).toHaveBeenCalledTimes(2);
 		expect(challengeUpdateMany).toHaveBeenCalledWith({
 			where: {
@@ -382,6 +442,8 @@ describe('PlatformMfaService', () => {
 function createChallenge() {
 	return {
 		id: 'challenge-id',
+		purpose: 'login',
+		mfaVersion: 1,
 		createdAt: new Date('2030-01-01T00:00:00.000Z'),
 		platformStaffId: 'staff-id',
 		expiresAt: new Date('2030-01-01T00:05:00.000Z'),
@@ -391,6 +453,8 @@ function createChallenge() {
 		emailOtpDigest: 'email-otp-digest',
 		emailOtpExpiresAt: new Date('2030-01-01T00:05:00.000Z'),
 		platformStaff: {
+			mfaVersion: 1,
+			recoveryGeneration: 1,
 			status: PlatformStaffStatus.ACTIVE,
 			user: {
 				id: 'user-id',
