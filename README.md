@@ -259,8 +259,8 @@ file dependency remains supported; no package version or lockfile was fabricated
 
 The initial owner remains pending because Step 6 has no approved mailbox-proof and credential/MFA
 enrollment flow. These endpoints serve already active, independently verified and enrolled platform
-staff; they cannot activate a pending owner. General MFA enrollment, replacement and recovery
-management remain Step 8. No public platform registration or password reset is added.
+staff; they cannot activate a pending owner. Step 8 management below preserves this bootstrap gate.
+No public platform registration or password reset is added.
 
 Deploy the reviewed DB migration `20261111180000_platform_authentication_audit` before these API
 changes. It expands CHECK constraints on the existing identity audit table without changing the
@@ -275,7 +275,7 @@ Existing identity lifecycle history is retained.
 | `POST /api/v1/platform/auth/mfa/verify` | Send exactly one existing MFA method/proof and the CSRF header; the server resolves the account from the pending cookie. Never submit a challenge token or identity.               |
 | `POST /api/v1/platform/auth/mfa/email`  | Existing opt-in fallback: pending cookie plus CSRF, no request body or recipient. Existing send cooldowns and quotas remain.                                                       |
 | `GET /api/v1/platform/auth/me`          | Full session required. Returns safe identity, live roles/permissions, expiry and authenticated/MFA flags. `/session` remains an alias.                                             |
-| `POST /api/v1/platform/auth/logout`     | Revoke the presented session and unused pending challenge, then expire all three cookies. Requires Origin and CSRF, including while MFA is pending.                                |
+| `POST /api/v1/platform/auth/logout`     | Revoke the presented session and unused pending challenge, then expire session, challenge, step-up and CSRF cookies. Requires Origin and CSRF, including while MFA is pending.     |
 
 Pending challenges expire within 60–300 seconds (default 300), allow at most the configured attempts
 (default five), and contain only a keyed digest in PostgreSQL. The separate
@@ -315,6 +315,116 @@ error.
 
 Deployment remains restricted to a single API instance through
 `PLATFORM_AUTH_SINGLE_INSTANCE=true`; a shared limiter and outage policy are required for replicas.
-Persistent abuse counters across restarts, full MFA management and recovery, live concurrency results,
+Persistent abuse counters across restarts, approved first-owner enrollment, live concurrency results,
 and the managed-owner/RLS isolation design remain release prerequisites. Agent verification was
 limited to source inspection and diffs; humans run npm and guarded development database checks.
+
+## Platform MFA management and recovery
+
+Step 8 reuses PlatformTotpCredential, PlatformMfaChallenge, PlatformRecoveryCode and the existing
+opaque platform sessions. `PLATFORM_MFA_MANAGEMENT_ENABLED` defaults to false in both templates.
+Keep it false until the forward database migration, generated package, keys, security sender and
+notification worker have been reviewed and verified. Enabling it outside offline tests requires
+explicit platform token and TOTP keys; TOTP keys cannot reuse any authentication pepper. Existing
+encrypted factors retain their original key ID/version. Keep old decrypt keys during approved key
+rotation; do not replace a key under an existing ID. Use independently managed 32-byte keys and
+the existing keyring; this step adds no KMS integration or automatic key rotation.
+
+Full platform access now requires a session explicitly issued through active TOTP. Recovery-code
+login consumes one code and returns `mfa_recovery_required` with a maximum five-minute repair session.
+It cannot reach `/me`, dashboard, organization administration or ordinary session-management methods.
+Opt-in email OTP also returns restricted state and grants neither full platform access nor MFA
+management; use TOTP or a saved recovery code to continue. Mailbox verification cannot replace the
+privileged account's required factor. Legacy sessions are rejected, and the migration revokes them.
+Frontends must inspect the returned status rather than treating every HTTP 200 as platform access.
+
+All management endpoints require the exact admin Origin, approved Host, platform session cookie,
+`x-platform-csrf-token` and existing real rate limiter, including the metadata GET. They never accept
+a user, organization, role or challenge token in JSON. The separately signed, host-only HttpOnly
+`__Host-akiba-platform-step-up` cookie is bound to the admin Origin; local HTTP uses
+`akiba-platform-step-up`. Its signing purpose differs from the login cookie. Responses use no-store.
+
+| Endpoint under `/api/v1/platform/auth`  | Required action and result                                                                                |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `POST /step-up/start`                   | Current password plus `operation`, and `factorId` for targeted actions; replaces prior management proofs. |
+| `POST /step-up/verify`                  | Existing active TOTP; an unused recovery code may authorize repair only.                                  |
+| `GET /mfa/factors`                      | Own factor ID, type, label, status and use/creation times only.                                           |
+| `POST /mfa/totp/enroll`                 | Verified `totp_enroll` proof and no active TOTP; bounded label, one-time setup response.                  |
+| `POST /mfa/totp/confirm`                | Enrollment cookie plus a six-digit code from the new authenticator.                                       |
+| `POST /mfa/factors/:id/replace`         | Verified `totp_replace` proof for this factor; returns pending setup.                                     |
+| `POST /mfa/factors/:id/replace/confirm` | Matching pending cookie and new TOTP code; commits replacement.                                           |
+| `PATCH /mfa/factors/:id`                | Verified `factor_rename` proof; changes only the bounded label.                                           |
+| `DELETE /mfa/factors/:id`               | Verified `totp_remove` proof; current one-factor policy denies final removal with 409.                    |
+| `POST /mfa/recovery-codes/regenerate`   | Verified `recovery_regenerate` proof using password and TOTP.                                             |
+
+Ordinary step-up requires current password followed by trusted-factor verification. Proofs bind the
+staff identity, session, operation, target, identity/credential/MFA/factor versions, five-minute expiry
+and five attempts. Each completed operation consumes its proof. Replacements leave the original
+factor active until new TOTP confirmation commits. Starting again supersedes prior management state;
+pending setup never authenticates. A recovery login has already consumed a trusted code; fresh
+password verification may narrow that recent session directly to enrollment/replacement without
+requiring a second recovery code. This permits recovery using the last saved code, but cannot rename,
+remove or regenerate codes independently. Account suspension or credential/version changes invalidate
+the flow. Loss of all factors and codes requires a future approved recovery process; bootstrap must
+never be reopened as an account-recovery shortcut.
+
+One canonical TOTP slot per staff is retained. New secrets have 160-bit entropy, issuer Akiba, SHA1,
+six digits, a 30-second period and a one-step drift allowance. AES-256-GCM uses random 12-byte IVs,
+authenticated staff/key/version context and a keyring outside PostgreSQL. Only the authorized setup
+response contains the manual secret and provisioning URI; never navigate to, log, cache or persist
+them in browser storage. Pending encrypted setup expires with its original proof. Confirmation stores
+the accepted time step; conditional updates and serializable transactions reject concurrent replay.
+The database denies deletion, disabling or unverifying the final active factor for non-revoked staff.
+
+Confirmation and regeneration return ten independent 128-bit recovery codes once. PostgreSQL stores
+only HMAC-SHA-256 verifiers under the authentication pepper with a distinct v2 domain, never the TOTP
+key. Legacy v1 verifiers remain accepted only in the current generation until rotated. Each successful
+use conditionally consumes one verifier, records an audit event and queues a safe security notification.
+There is no plaintext retrieval endpoint. Factor changes advance MFA/recovery generations and revoke
+all old platform sessions, proofs and unused codes atomically; regeneration does the same explicitly.
+Recovery use revokes other sessions. Confirmation/rotation clears cookies and requires fresh TOTP
+login; activation itself never issues a privileged session. Rename preserves replay state and assurance.
+
+IdentitySecurityAuditEvent remains append-only and records step-up, enrollment, denied removal,
+factor changes and recovery transitions without secrets. PlatformSecurityNotification is a separate
+transactional outbox containing approved event, verified recipient and correlation ID. Audit/outbox
+failure rolls back sensitive changes. The existing Resend adapter sends fixed templates with the
+notification ID as its idempotency key and stores the validated provider message ID for reconciliation.
+Queued means queued; provider acceptance means sent, not
+confirmed mailbox delivery. After building, an operator can run one bounded batch:
+
+```bash
+NODE_ENV=development npm run worker:platform-security
+```
+
+The standalone worker loads the selected existing environment and sends at most 20 reserved rows.
+Only one worker can reserve a queued row. Provider timeouts or recording failures become uncertain;
+a crash can leave sending rows. Neither state is retried automatically. Operators must reconcile
+provider state before any reviewed recovery, monitor queue age/failures and arrange scheduling. No
+notification secrets or provider responses are printed. Verify sender ownership/DNS and delivery
+before enabling management. Production scheduling, reconciliation, retention and delivery monitoring
+remain deployment dependencies; the CLI does not create a scheduler or delivery-webhook workflow.
+
+Management errors use the standard problem contract, including `AUTH_REAUTHENTICATION_REQUIRED`,
+`AUTH_MFA_INVALID`, `AUTH_MFA_FACTOR_NOT_FOUND`, `AUTH_MFA_FACTOR_CHANGE_DENIED`, `ACCESS_DENIED`,
+`VALIDATION_FAILED`, `RATE_LIMITED` and `SERVICE_UNAVAILABLE`. Expired or mismatched management proof
+requires restarting reauthentication. Request IDs and safe messages remain centralized. Start/rotation
+are limited to three per minute, verification/confirmation to five and other management routes to ten,
+in addition to existing global controls. Persisted proof attempts supplement the single-instance
+limiter; a distributed durable limiter and outage policy remain required before using replicas.
+
+Future authenticators should implement typed enrollment/assertion verification and persisted replay
+or signature-counter policy, with platform and organization authorization domains kept distinct. Safe
+metadata already carries a factor type. Passkeys need reviewed registration/assertion challenge scope,
+exact origin allowlists, a configured relying-party ID compatible with the admin host, user verification,
+credential ownership and counter/backup handling. No passkey routes are implemented; TOTP is not
+phishing-resistant. Multi-factor slots require a reviewed schema/policy expansion before allowing removal.
+
+Human validation order: review DB status and SQL diff, deploy the reviewed migration in an exclusive
+development window, validate/generate/build `api/db`, then format/lint/typecheck/test/build this API.
+The local `file:../db` dependency remains unchanged; refresh installation only if its built package is
+stale. Pin CI to the reviewed DB commit as above. Added unit, HTTP and guarded PostgreSQL cases have
+not been executed by the agent. First-owner enrollment, managed-owner/BYPASSRLS isolation, operational
+delivery, secret custody and live concurrency/rollback verification remain release gates. Step 8 is
+partially complete until those checks and the restricted bootstrap enrollment are resolved; Step 9
+development may proceed without activating customer or production authentication flows.
