@@ -454,3 +454,24 @@ by managed-owner/RLS limitations, owner MFA and approval prerequisites, unverifi
 notification operations and DNS/TLS/reverse-proxy deployment. No database migration, role, external
 resource or production state was changed during this audit. New regression tests and all live database
 guarantees remain unverified until human checks provide results.
+
+## Step 10 audit gate
+
+The Step 10 audit retains the Step 9 blocker: organization approval/readiness is not represented
+separately, and no organization-owner MFA verifier exists. The legacy owner login still requests an
+operational AAL1 membership session after password verification; this is not the required privileged
+MFA login flow and must not be released as Step 10 authentication. Merely labelling a session AAL2,
+copying platform TOTP credentials or bypassing the acceptance gate is not a remedy. Dependent new
+login/MFA/profile endpoints remain unimplemented under the milestone's critical-blocker stop rule.
+Step 11 account recovery is not ready to build on this incomplete assurance lifecycle.
+
+An independent boundary correction makes the shared slug validator reject final LF, CR and Unicode
+line separators. Its former JavaScript dollar anchor accepted a final line terminator, unlike the
+registration DTO's absolute-end rule; a reserved name plus a terminator could pass the helper's
+exact reserved-name comparison. Regression cases now cover ordinary and every reserved slug with
+those suffixes. No live hostname exploit is claimed, and origin/Host checks remain mandatory.
+
+Current source review does not verify remote freshness, live migrations, Neon RLS, DNS/TLS, proxy
+routing or delivery operations. Agents have not run npm, Prisma, tests or builds. Production remains
+blocked; neither existing application predicates nor owner-role integration tests establish an
+independent database-enforced tenant boundary.
