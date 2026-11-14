@@ -33,6 +33,28 @@ describe('ResendEmailService', () => {
 			headers: { 'Idempotency-Key': 'platform-otp/fictional-delivery-id' },
 		});
 	});
+	it('uses only approved security templates and never interpolates authenticator material', async () => {
+		fetchMock.mockResolvedValueOnce(Response.json({ id: '2f5298af-cf42-4e66-8968-a42be74cb34b' }));
+		await service.sendSecurityNotification(
+			'owner@example.com',
+			'mfa_factor_replaced',
+			'notification-id',
+		);
+		expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+			headers: { 'Idempotency-Key': 'platform-security/notification-id' },
+			body: JSON.stringify({
+				from: 'security@example.com',
+				to: ['owner@example.com'],
+				subject: 'Akiba platform security change',
+				text: 'Your authenticator was replaced and prior sessions were invalidated. If you did not authorize this change, contact your approved security operator immediately. This message contains no sign-in or recovery credentials.',
+			}),
+		});
+		await expect(
+			service.sendSecurityNotification('owner@example.com', 'unapproved-secret', 'notification-id'),
+		).rejects.toMatchObject({ status: 503 });
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
 	it.each([401, 429, 500])('sanitizes provider failure %s and never retries', async (status) => {
 		fetchMock.mockResolvedValueOnce(
 			Response.json({ message: 'private provider message' }, { status }),
