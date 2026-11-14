@@ -56,6 +56,67 @@ describe('PlatformSessionService', () => {
 		auditCreate.mockResolvedValue({ id: 'audit-id' });
 	});
 
+	it.each(['recovery_code', 'email_otp', 'legacy'])(
+		'rejects %s as ordinary platform authority without destroying repair state',
+		async (authenticationMethod) => {
+			sessionFindUnique.mockResolvedValue({
+				...createSession([], 'platform.owner', true),
+				authenticationMethod,
+			});
+			await expect(
+				service.authenticate('fictional-session-token', new Date('2030-01-01T00:00:01.000Z')),
+			).rejects.toMatchObject({ status: 401 });
+			expect(sessionUpdateMany).not.toHaveBeenCalled();
+		},
+	);
+
+	it('accepts recovery context only for MFA management and still denies business authorization', async () => {
+		const now = new Date();
+		const current = createSession([], 'platform.owner', true);
+		current.createdAt = new Date(now.getTime() - 60_000);
+		current.mfaVerifiedAt = current.createdAt;
+		current.expiresAt = new Date(now.getTime() + 300_000);
+		current.idleExpiresAt = current.expiresAt;
+		current.platformStaff.user.passwordCredential.passwordChangedAt = new Date(
+			now.getTime() - 120_000,
+		);
+		sessionFindUnique.mockResolvedValue({ ...current, authenticationMethod: 'recovery_code' });
+		const principal = await service.authenticateForMfaManagement('fictional-session-token', now);
+		expect(principal.authenticationMethod).toBe('recovery_code');
+		await expect(
+			service.authorize(principal, PLATFORM_PERMISSION.dashboardRead),
+		).rejects.toMatchObject({ status: 401 });
+		expect(sessionUpdateMany).not.toHaveBeenCalled();
+	});
+
+	it('never treats email verification as authority to manage MFA', async () => {
+		sessionFindUnique.mockResolvedValue({
+			...createSession([], 'platform.owner', true),
+			authenticationMethod: 'email_otp',
+		});
+		await expect(
+			service.authenticateForMfaManagement(
+				'fictional-session-token',
+				new Date('2030-01-01T00:00:01.000Z'),
+			),
+		).rejects.toMatchObject({ status: 401 });
+	});
+
+	it('rejects and invalidates a session whose MFA generation is stale', async () => {
+		sessionFindUnique.mockResolvedValue({
+			...createSession([], 'platform.owner', true),
+			mfaVersion: 2,
+		});
+		await expect(
+			service.authenticate('fictional-session-token', new Date('2030-01-01T00:00:01.000Z')),
+		).rejects.toMatchObject({ status: 401 });
+		expect(sessionUpdateMany).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({ revocationReason: 'invalidated' }),
+			}),
+		);
+	});
+
 	it('scopes selected remote revocation to the authenticated platform staff identity', async () => {
 		const selectedId = '11111111-1111-4111-8111-111111111111';
 		const now = new Date('2030-01-01T00:10:00.000Z');
@@ -323,6 +384,8 @@ function createSession(
 ) {
 	return {
 		id: 'session-id',
+		authenticationMethod: 'totp',
+		mfaVersion: 1,
 		createdAt: new Date('2030-01-01T00:00:00.000Z'),
 		expiresAt: new Date('2030-01-01T08:00:00.000Z'),
 		idleExpiresAt: new Date('2030-01-01T00:30:00.000Z'),
@@ -330,6 +393,7 @@ function createSession(
 		mfaVerifiedAt: new Date('2030-01-01T00:00:00.000Z'),
 		platformStaff: {
 			id: 'staff-id',
+			mfaVersion: 1,
 			status: PlatformStaffStatus.ACTIVE,
 			user: {
 				id: 'user-id',
