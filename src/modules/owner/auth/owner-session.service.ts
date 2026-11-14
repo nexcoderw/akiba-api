@@ -65,6 +65,10 @@ export class OwnerSessionService {
 		assurance: OwnerSessionAssurance,
 		now = new Date(),
 	): Promise<{ readonly token: string; readonly expiresAt: Date }> {
+		// Operational organization access fails closed until its required MFA is completed.
+		// AAL1 enrollment proofs remain restricted to the separate invitation flow.
+		if (binding.membershipId !== undefined && assurance !== OwnerSessionAssurance.AAL2)
+			throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidSession);
 		const token = this.tokens.create();
 		const expiresAt = new Date(now.getTime() + this.sessionLifetimeMilliseconds);
 		await this.prisma.$transaction(
@@ -353,6 +357,7 @@ export class OwnerSessionService {
 						membershipId: true,
 						enrollmentChallengeId: true,
 						assurance: true,
+						mfaVerifiedAt: true,
 						authenticatedAt: true,
 						idleExpiresAt: true,
 						absoluteExpiresAt: true,
@@ -396,7 +401,11 @@ export class OwnerSessionService {
 					(session.membershipId === null && session.enrollmentChallengeId === null) ||
 					(session.membershipId !== null && session.enrollmentChallengeId !== null) ||
 					(session.membershipId !== null &&
-						(session.membership?.id !== session.membershipId ||
+						(session.assurance !== OwnerSessionAssurance.AAL2 ||
+							session.mfaVerifiedAt === null ||
+							session.mfaVerifiedAt > now ||
+							session.mfaVerifiedAt < session.authenticatedAt ||
+							session.membership?.id !== session.membershipId ||
 							session.membership.organization.id !== session.organizationId ||
 							session.membership.status !== OrganizationMembershipStatus.ACTIVE ||
 							session.membership.organization.status !== OrganizationStatus.ACTIVE)) ||
