@@ -62,7 +62,7 @@ export class OwnerAuthController {
 	@ApiOperation({
 		summary: 'Sign in to the Organization Portal',
 		description:
-			'Authenticates an active verified non-platform identity with a live OWNER membership and issues a separate host-only owner session.',
+			'Legacy credential entry point. Operational owner sessions require verified AAL2 assurance. This password-only flow currently returns the generic credential failure and issues no session until organization MFA verification is implemented. Restricted invitation enrollment is a separate flow.',
 	})
 	@ApiOkResponse({ type: OwnerAuthenticatedResponseDto })
 	@ApiBadRequestResponse({ type: ApiErrorResponseDto })
