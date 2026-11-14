@@ -100,6 +100,8 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 	let revoked: boolean;
 	let accountStatus: UserStatus;
 	let credentialDisabled: boolean;
+	let assurance: 'AAL1' | 'AAL2';
+	let mfaVerifiedAt: Date | null;
 	let multiple: boolean;
 	let removedAfterAuthentication: boolean;
 	let systemOwner: boolean;
@@ -128,7 +130,8 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 							roles: [{ organizationRole: { key: 'owner' } }],
 						}
 					: null,
-			assurance: 'AAL1',
+			assurance,
+			mfaVerifiedAt,
 			authenticatedAt: new Date('2026-01-01'),
 			idleExpiresAt: new Date('2099-01-01'),
 			absoluteExpiresAt: new Date('2099-01-01'),
@@ -278,6 +281,8 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 		revoked = false;
 		accountStatus = UserStatus.ACTIVE;
 		credentialDisabled = false;
+		assurance = 'AAL2';
+		mfaVerifiedAt = new Date('2026-01-01');
 		multiple = false;
 		removedAfterAuthentication = false;
 		systemOwner = true;
@@ -296,6 +301,19 @@ describe('tenant security boundary (offline adapters, real guards and services)'
 			.set('Cookie', `akiba-owner-session=${sealOwnerSession(token, cookieOrigin, KEY)}`);
 	}
 
+	it('denies password-only operational sessions before tenant persistence', async () => {
+		assurance = 'AAL1';
+		await call().expect(401);
+		expect(memberReads).not.toHaveBeenCalled();
+	});
+	it.each([null, new Date('2099-01-01'), new Date('2025-01-01')])(
+		'denies missing, future or pre-authentication MFA evidence: %p',
+		async (timestamp) => {
+			mfaVerifiedAt = timestamp;
+			await call().expect(401);
+			expect(memberReads).not.toHaveBeenCalled();
+		},
+	);
 	it('returns only the authenticated organization with explicit scoped persistence', async () => {
 		const response = await call().expect(200);
 		expect(response.body).toMatchObject({ organizationId: A, organizationName: 'Musomesa' });
