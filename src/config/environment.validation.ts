@@ -430,7 +430,23 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
 			);
 		}
 	}
-	const resendRequired = emailOtpEnabled || invitationDelivery !== null;
+	const mfaManagementEnabled = parseBoolean(
+		input.PLATFORM_MFA_MANAGEMENT_ENABLED,
+		'PLATFORM_MFA_MANAGEMENT_ENABLED',
+		false,
+	);
+	if (
+		mfaManagementEnabled &&
+		nodeEnvironment !== 'test' &&
+		(tokenPepper === DEFAULT_LOCAL_KEY ||
+			Object.values(totpKeyring).some(
+				(key) =>
+					key === DEFAULT_LOCAL_KEY ||
+					[tokenPepper, ownerTokenPepper, ownerEnrollmentTokenPepper].includes(key),
+			))
+	)
+		throw new Error('MFA management requires explicit independent authentication and TOTP keys.');
+	const resendRequired = emailOtpEnabled || invitationDelivery !== null || mfaManagementEnabled;
 	const resendApiKey = resendRequired
 		? requireString(input.RESEND_API_KEY, 'RESEND_API_KEY')
 		: null;
@@ -529,6 +545,7 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
 		),
 		PLATFORM_AUTH_SINGLE_INSTANCE: singleInstance,
 		PLATFORM_AUTH_EMAIL_OTP_ENABLED: emailOtpEnabled,
+		PLATFORM_MFA_MANAGEMENT_ENABLED: mfaManagementEnabled,
 		ORGANIZATION_PORTAL_ORIGIN: organizationPortalPolicy.fixedOrigin,
 		ORGANIZATION_PORTAL_BASE_DOMAIN: organizationPortalPolicy.baseDomain,
 		OWNER_AUTH_COOKIE_SECURE: ownerCookieSecure,
