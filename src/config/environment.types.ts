@@ -33,6 +33,7 @@ export interface EnvironmentVariables {
 	readonly PLATFORM_AUTH_LOGIN_ATTEMPT_LIMIT: number;
 	readonly PLATFORM_AUTH_SINGLE_INSTANCE: boolean;
 	readonly PLATFORM_AUTH_EMAIL_OTP_ENABLED: boolean;
+	readonly PLATFORM_MFA_MANAGEMENT_ENABLED: boolean;
 	readonly ORGANIZATION_PORTAL_ORIGIN: string | null;
 	readonly ORGANIZATION_PORTAL_BASE_DOMAIN: string | null;
 	readonly OWNER_AUTH_COOKIE_SECURE: boolean;
