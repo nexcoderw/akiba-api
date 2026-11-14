@@ -307,9 +307,11 @@ context, while physical browser cookie isolation on `admin.akiba.com` needs revi
 No shared parent-domain cookie is used.
 
 Errors retain `application/problem+json`, server request IDs and safe codes including
-`AUTH_INVALID_CREDENTIALS`, `AUTH_MFA_INVALID`, `AUTH_SESSION_EXPIRED`, `ACCESS_DENIED`,
-`RATE_LIMITED`, `VALIDATION_FAILED` and `SERVICE_UNAVAILABLE`. Login cannot reveal a missing MFA
-setup through a distinct public account-state error.
+`PLATFORM_AUTHENTICATION_FAILED`, `PLATFORM_MFA_VERIFICATION_FAILED`,
+`PLATFORM_SESSION_INVALID`, `ACCESS_DENIED`, `RATE_LIMITED` and `VALIDATION_FAILED`.
+The catalog shares safe messages and statuses across related codes while preserving each accepted
+code in the response. Login cannot reveal a missing MFA setup through a distinct public account-state
+error.
 
 Deployment remains restricted to a single API instance through
 `PLATFORM_AUTH_SINGLE_INSTANCE=true`; a shared limiter and outage policy are required for replicas.
