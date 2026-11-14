@@ -275,7 +275,7 @@ export class PlatformSessionService {
 							platformStaff: { select: { user: { select: { id: true, identityVersion: true } } } },
 						},
 					});
-					if (session === null || session.revokedAt !== null) return false;
+					if (session?.revokedAt !== null) return false;
 					const revoked = await transaction.platformAdminSession.updateMany({
 						where: { id: session.id, revokedAt: null },
 						data: { revokedAt: now, revocationReason: 'logout' },
