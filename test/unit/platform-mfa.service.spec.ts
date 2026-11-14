@@ -13,7 +13,7 @@ describe('PlatformMfaService', () => {
 	const challengeFindUnique = jest.fn<() => Promise<unknown>>();
 	const challengeUpdateMany = jest.fn<() => Promise<{ count: number }>>();
 	const totpUpdateMany = jest.fn<() => Promise<{ count: number }>>();
-	const recoveryUpdateMany = jest.fn<() => Promise<{ count: number }>>();
+	const recoveryUpdateMany = jest.fn<(input: unknown) => Promise<{ count: number }>>();
 	const sessionCreate = jest.fn<(input: unknown) => Promise<unknown>>();
 	const sessionUpdateMany = jest.fn<() => Promise<{ count: number }>>();
 	const notificationCreate = jest.fn<() => Promise<unknown>>();
@@ -238,9 +238,9 @@ describe('PlatformMfaService', () => {
 				data: { revokedAt: now, revocationReason: 'recovery_used' },
 			}),
 		);
-		expect(recoveryUpdateMany).toHaveBeenCalledWith(
-			expect.objectContaining({ where: expect.objectContaining({ generation: 1, usedAt: null }) }),
-		);
+		expect(recoveryUpdateMany.mock.calls[0]?.[0]).toMatchObject({
+			where: { generation: 1, usedAt: null },
+		});
 	});
 
 	it.each([{ purpose: 'step_up' }, { purpose: 'enrollment' }, { mfaVersion: 2 }])(
