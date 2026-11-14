@@ -98,8 +98,10 @@ export class OwnerLoginService {
 				csrfToken: '',
 			};
 		} catch (error: unknown) {
-			if (error instanceof UnauthorizedException)
+			if (error instanceof UnauthorizedException) {
+				this.attempts.recordFailure(ipAddress, email, now.getTime());
 				throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidCredentials);
+			}
 			if (error instanceof ApiProblemException) throw error;
 			throw this.persistenceFailure(error);
 		}
