@@ -11,7 +11,7 @@ import { PLATFORM_PERMISSION } from '../../src/modules/platform/auth/platform-pe
 
 describe('PlatformSessionService', () => {
 	const sessionFindUnique = jest.fn<() => Promise<unknown>>();
-	const sessionUpdateMany = jest.fn<() => Promise<{ count: number }>>();
+	const sessionUpdateMany = jest.fn<(input: unknown) => Promise<{ count: number }>>();
 	const auditCreate = jest.fn<(input: unknown) => Promise<unknown>>();
 	const transaction = {
 		identitySecurityAuditEvent: { create: auditCreate },
@@ -110,11 +110,9 @@ describe('PlatformSessionService', () => {
 		await expect(
 			service.authenticate('fictional-session-token', new Date('2030-01-01T00:00:01.000Z')),
 		).rejects.toMatchObject({ status: 401 });
-		expect(sessionUpdateMany).toHaveBeenCalledWith(
-			expect.objectContaining({
-				data: expect.objectContaining({ revocationReason: 'invalidated' }),
-			}),
-		);
+		expect(sessionUpdateMany.mock.calls[0]?.[0]).toMatchObject({
+			data: { revocationReason: 'invalidated' },
+		});
 	});
 
 	it('scopes selected remote revocation to the authenticated platform staff identity', async () => {
