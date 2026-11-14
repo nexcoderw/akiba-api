@@ -19,6 +19,7 @@ describe('platform production cookie attributes', () => {
 		cookies.setSession(response, tokens.createToken(), expiry);
 		cookies.setChallenge(response, tokens.createToken(), expiry);
 		cookies.setCsrf(response, tokens.createToken(), expiry);
+		cookies.setStepUp(response, tokens.createToken(), expiry);
 		response.sendStatus(204);
 	});
 	app.post('/clear', (_request, response) => {
@@ -29,8 +30,8 @@ describe('platform production cookie attributes', () => {
 	it('sets distinct host-only secure cookies and hides authentication credentials from JavaScript', async () => {
 		const response = await request(app).get('/set').expect(204);
 		const issued = response.get('Set-Cookie') ?? [];
-		expect(issued).toHaveLength(3);
-		for (const name of ['session', 'challenge', 'csrf']) {
+		expect(issued).toHaveLength(4);
+		for (const name of ['session', 'challenge', 'csrf', 'step-up']) {
 			const cookie = issued.find((value) => value.startsWith(`__Host-akiba-platform-${name}=`));
 			expect(cookie).toContain('Secure');
 			expect(cookie).toContain('SameSite=Strict');
@@ -43,7 +44,7 @@ describe('platform production cookie attributes', () => {
 	it('expires all platform authentication cookies with their matching scope', async () => {
 		const response = await request(app).post('/clear').expect(204);
 		const expired = response.get('Set-Cookie') ?? [];
-		expect(expired).toHaveLength(3);
+		expect(expired).toHaveLength(4);
 		for (const cookie of expired) {
 			expect(cookie).toContain('Expires=Thu, 01 Jan 1970');
 			expect(cookie).toContain('Secure');
