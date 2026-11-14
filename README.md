@@ -505,3 +505,31 @@ No schema, migration, environment secret or delivery configuration changed in th
 regressions exercise the real login/session service boundary, reject insufficient stored assurance
 and preserve provisional enrollment. Tests, builds and live database checks have not been run by
 the agent. Step 12 public authorization expansion remains gated by these unresolved prerequisites.
+
+## Step 12 audit and authorization repair
+
+Step 11 self-service password recovery remains absent: there are no forgot-password, reset-password
+or authenticated change-password HTTP routes, reset-token records or reset-delivery workflow. The
+existing administrative credential service is not evidence that those protocols are implemented.
+Their request privacy, reset-proof concurrency and delivery requirements cannot be marked passed.
+
+OrganizationAuthorizationService now enforces the same operational assurance floor as
+OwnerSessionService during its transaction-level recheck. A matching AAL1 context/session is denied,
+as is AAL2 with missing, future or pre-authentication MFA evidence. Rejection occurs before loading
+membership grants. Previously this service removed only owner-only permissions from AAL1 grants,
+leaving other role-management capabilities available to an internal caller with such a context.
+Controller authentication does not replace this service-level check. Valid AAL2 authorization still
+rechecks the selected membership, active roles and canonical permission mappings on each operation.
+
+Existing Step 4 custom-role and assignment workflows remain internal. No public role-management
+controller, new permission identifier, privilege metadata, database model or migration is added by
+this repair. The eight existing organization capability keys remain separate from platform keys;
+active role grants union only within the selected organization, and custom roles never inherit the
+protected owner-only capability. Organization-specific purpose-bound step-up, complete owner MFA,
+approval/readiness and Step 11 recovery remain prerequisites for the requested operational APIs.
+Dependent Step 12 implementation is blocked under the brief's prerequisite-verification rule.
+
+Regression cases cover AAL1, absent/future/old MFA evidence and valid AAL2 live grants. They are
+authored but not executed. Managed-owner/BYPASSRLS isolation, production deployment/secret management,
+distributed throttling, recovery governance and live migration/integration verification remain release
+blockers. Final adversarial hardening can inspect these gaps, but Step 13 is not a production sign-off.
