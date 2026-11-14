@@ -203,7 +203,13 @@ export class PlatformAuthController {
 		let result: Awaited<ReturnType<PlatformMfaService['verify']>>;
 		try {
 			result = await this.mfaService.verify(
-				{ ...input, challengeToken: this.requireChallenge(request) },
+				{
+					method: input.method,
+					emailOtpCode: input.emailOtpCode,
+					totpCode: input.totpCode,
+					recoveryCode: input.recoveryCode,
+					challengeToken: this.requireChallenge(request),
+				},
 				undefined,
 				request.requestId,
 			);
