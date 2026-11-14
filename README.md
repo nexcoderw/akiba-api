@@ -475,3 +475,33 @@ Current source review does not verify remote freshness, live migrations, Neon RL
 routing or delivery operations. Agents have not run npm, Prisma, tests or builds. Production remains
 blocked; neither existing application predicates nor owner-role integration tests establish an
 independent database-enforced tenant boundary.
+
+## Step 11 prerequisite repair
+
+The Step 11 audit closes the legacy password-only operational owner-session path. OwnerSessionService
+now rejects AAL1 membership-session issuance before generating a token or opening a transaction.
+Existing operational sessions must carry AAL2 and a persisted MFA timestamp at or after primary
+authentication and no later than the verification time; insufficient sessions are denied and marked
+invalidated. This also prevents a low-assurance session from gaining operational access through a
+later role assignment. Restricted AAL1 invitation-enrollment sessions remain separate and cannot
+become active ownership through the acceptance gate. Failed session admission retains the generic
+login failure and counts against the existing account/network attempts rather than clearing them.
+
+The current legacy owner login supplies AAL1, so it now fails closed even for a correct password.
+This is a deliberate security restriction until genuine organization MFA verification can issue the
+appropriate assurance. The internal AAL2 argument is not itself MFA verification; no public route
+may promote assurance or manufacture its timestamp. Existing synthetic AAL2 tests do not establish
+a working organization MFA flow or production readiness.
+
+Step 11 recovery endpoints remain unimplemented behind the unresolved Step 10 owner-MFA and
+approval/readiness prerequisites. No forgot-password response, reset email, reset proof or password
+change success is simulated. The existing administrative PasswordCredentialService remains separate
+from self-service recovery: it uses the canonical password policy/Argon2id service, locks and versions
+the global identity/credential, revokes platform and organization sessions and invalidates pending
+proofs with its audit write in one transaction. It is not a public reset-token protocol. A future
+password reset must preserve MFA and account/membership state and never issue a session.
+
+No schema, migration, environment secret or delivery configuration changed in this repair. New
+regressions exercise the real login/session service boundary, reject insufficient stored assurance
+and preserve provisional enrollment. Tests, builds and live database checks have not been run by
+the agent. Step 12 public authorization expansion remains gated by these unresolved prerequisites.
