@@ -11,6 +11,8 @@ import {
 	PLATFORM_CHALLENGE_COOKIE,
 	PLATFORM_CSRF_COOKIE,
 	PLATFORM_SESSION_COOKIE,
+	PLATFORM_STEP_UP_COOKIE,
+	LOCAL_PLATFORM_STEP_UP_COOKIE,
 } from './platform-auth.constants.js';
 import { PlatformTokenService } from './platform-token.service.js';
 
@@ -21,6 +23,7 @@ export class PlatformCookieService {
 	private readonly csrfCookieName: string;
 	private readonly challengeCookieName: string;
 	private readonly origin: string;
+	private readonly stepUpCookieName: string;
 
 	constructor(
 		config: ConfigService<EnvironmentVariables, true>,
@@ -33,10 +36,19 @@ export class PlatformCookieService {
 			? PLATFORM_CHALLENGE_COOKIE
 			: LOCAL_PLATFORM_CHALLENGE_COOKIE;
 		this.origin = config.get('PLATFORM_ADMIN_ORIGIN', { infer: true });
+		this.stepUpCookieName = this.secure ? PLATFORM_STEP_UP_COOKIE : LOCAL_PLATFORM_STEP_UP_COOKIE;
 	}
 
 	readChallenge(request: Request): string | undefined {
-		const value = this.readCookie(request, this.challengeCookieName);
+		return this.readProof(request, this.challengeCookieName, 'platform-challenge-cookie-v1');
+	}
+
+	readStepUp(request: Request): string | undefined {
+		return this.readProof(request, this.stepUpCookieName, 'platform-step-up-cookie-v1');
+	}
+
+	private readProof(request: Request, name: string, purpose: string): string | undefined {
+		const value = this.readCookie(request, name);
 		if (value === undefined || value.length > 340 || request.headers.origin !== this.origin)
 			return undefined;
 		const [version, token, signature, extra] = value.split('.');
@@ -46,14 +58,34 @@ export class PlatformCookieService {
 			!/^[A-Za-z0-9_-]{32,256}$/u.test(token) ||
 			signature === undefined ||
 			extra !== undefined ||
-			!this.tokens.equal(signature, this.challengeSignature(token))
+			!this.tokens.equal(signature, this.challengeSignature(token, purpose))
 		)
 			return undefined;
 		return token;
 	}
 
 	setChallenge(response: Response, token: string, expiresAt: Date): void {
-		response.cookie(this.challengeCookieName, `v1.${token}.${this.challengeSignature(token)}`, {
+		this.setProof(
+			response,
+			this.challengeCookieName,
+			token,
+			expiresAt,
+			'platform-challenge-cookie-v1',
+		);
+	}
+
+	setStepUp(response: Response, token: string, expiresAt: Date): void {
+		this.setProof(response, this.stepUpCookieName, token, expiresAt, 'platform-step-up-cookie-v1');
+	}
+
+	private setProof(
+		response: Response,
+		name: string,
+		token: string,
+		expiresAt: Date,
+		purpose: string,
+	): void {
+		response.cookie(name, `v1.${token}.${this.challengeSignature(token, purpose)}`, {
 			expires: expiresAt,
 			httpOnly: true,
 			path: '/',
@@ -64,6 +96,15 @@ export class PlatformCookieService {
 
 	clearChallenge(response: Response): void {
 		response.clearCookie(this.challengeCookieName, {
+			httpOnly: true,
+			path: '/',
+			sameSite: 'strict',
+			secure: this.secure,
+		});
+	}
+
+	clearStepUp(response: Response): void {
+		response.clearCookie(this.stepUpCookieName, {
 			httpOnly: true,
 			path: '/',
 			sameSite: 'strict',
@@ -107,6 +148,7 @@ export class PlatformCookieService {
 			secure: this.secure,
 		});
 		this.clearChallenge(response);
+		this.clearStepUp(response);
 		response.clearCookie(this.csrfCookieName, {
 			httpOnly: false,
 			path: '/',
@@ -115,8 +157,8 @@ export class PlatformCookieService {
 		});
 	}
 
-	private challengeSignature(token: string): string {
-		return this.tokens.digest(JSON.stringify(['platform-challenge-cookie-v1', this.origin, token]));
+	private challengeSignature(token: string, purpose: string): string {
+		return this.tokens.digest(JSON.stringify([purpose, this.origin, token]));
 	}
 
 	private readCookie(request: Request, name: string): string | undefined {
