@@ -12,6 +12,7 @@ import { configureApplication } from '../../src/app-bootstrap.js';
 import { AppModule } from '../../src/app.module.js';
 import { validateEnvironment } from '../../src/config/environment.validation.js';
 import { LOCAL_PLATFORM_SESSION_COOKIE } from '../../src/modules/platform/auth/platform-auth.constants.js';
+import { PLATFORM_PERMISSION } from '../../src/modules/platform/auth/platform-permission.constants.js';
 import { PlatformTokenService } from '../../src/modules/platform/auth/platform-token.service.js';
 import { createPlatformDashboardDatabaseFixture } from '../fixtures/platform-dashboard-database.fixture.js';
 
@@ -175,9 +176,17 @@ describe('platform dashboard HTTP API (real session and permission guards)', () 
 
 	it('returns 403 for a valid administrator without the dashboard permission', async () => {
 		session.platformStaff.roles[0]?.platformRole.permissions.splice(0, 1, {
-			platformPermission: { key: 'platform.other.read' },
+			platformPermission: { key: PLATFORM_PERMISSION.organizationsRead },
 		});
 		await dashboardRequest().set('Cookie', COOKIE).expect(403);
+		expect(database.userCount).not.toHaveBeenCalled();
+	});
+
+	it('rejects a session whose only platform permission is undeclared', async () => {
+		session.platformStaff.roles[0]?.platformRole.permissions.splice(0, 1, {
+			platformPermission: { key: 'platform.other.read' },
+		});
+		await dashboardRequest().set('Cookie', COOKIE).expect(401);
 		expect(database.userCount).not.toHaveBeenCalled();
 	});
 
@@ -191,7 +200,7 @@ describe('platform dashboard HTTP API (real session and permission guards)', () 
 			{
 				platformRole: {
 					key: 'platform.owner',
-					permissions: [{ platformPermission: { key: 'platform.other.read' } }],
+					permissions: [{ platformPermission: { key: PLATFORM_PERMISSION.organizationsRead } }],
 				},
 			},
 		];
@@ -227,7 +236,7 @@ describe('platform dashboard HTTP API (real session and permission guards)', () 
 			{
 				platformRole: {
 					key: 'platform.auditor',
-					permissions: [{ platformPermission: { key: 'platform.other.read' } }],
+					permissions: [{ platformPermission: { key: PLATFORM_PERMISSION.organizationsRead } }],
 				},
 			},
 		];
