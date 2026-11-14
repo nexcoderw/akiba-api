@@ -10,6 +10,7 @@ import {
 } from '@nexcoderw/akiba-db';
 
 import type { OwnerPrincipal } from '../auth/owner-auth.types.js';
+import { ApiProblemException } from '../../../common/errors/api-problem.exception.js';
 import { OwnerTokenService } from '../auth/owner-token.service.js';
 import type { OwnerInvitationAcceptedResponseDto } from './dto/owner-enrollment-response.dto.js';
 import {
@@ -38,6 +39,9 @@ export class OwnerAcceptanceService {
 		now = new Date(),
 		organizationSlug?: string,
 	): Promise<OwnerInvitationAcceptedResponseDto> {
+		// Password-only provisional sessions cannot activate privileged owner membership.
+		// Platform MFA proofs belong to a separate security domain and cannot fill this gap.
+		if (principal.assurance !== 'AAL2') throw new ApiProblemException('AUTH_MFA_REQUIRED');
 		if (!this.tokens.isValid(challengeToken)) throw invalidOwnerEnrollment();
 		const challengeDigest = this.tokens.enrollmentDigest(challengeToken);
 		try {
@@ -57,6 +61,7 @@ export class OwnerAcceptanceService {
 						userId: true,
 						status: true,
 						expiresAt: true,
+						stepUpVerifiedAt: true,
 						ownerInvitation: {
 							select: {
 								id: true,
@@ -89,6 +94,13 @@ export class OwnerAcceptanceService {
 					challenge.ownerInvitation.tokenDigest === null
 				) {
 					throw invalidOwnerEnrollment();
+				}
+				if (
+					challenge.stepUpVerifiedAt === null ||
+					challenge.stepUpVerifiedAt > now ||
+					challenge.stepUpVerifiedAt.getTime() <= now.getTime() - 300_000
+				) {
+					throw new ApiProblemException('AUTH_MFA_REQUIRED');
 				}
 				const organization = challenge.ownerInvitation.organization;
 				if (
