@@ -6,6 +6,7 @@ export type RouteAccess =
 	| 'public'
 	| 'platform'
 	| 'platform-session'
+	| 'platform-mfa'
 	| 'owner-session'
 	| 'owner-enrollment'
 	| 'organization';
