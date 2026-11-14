@@ -7,7 +7,17 @@ export type PlatformAuthenticationAction =
 	| 'platform_mfa_rejected'
 	| 'platform_session_issued'
 	| 'platform_session_revoked'
-	| 'platform_challenge_revoked';
+	| 'platform_challenge_revoked'
+	| 'mfa_step_up_started'
+	| 'mfa_step_up_verified'
+	| 'mfa_enrollment_started'
+	| 'mfa_enrollment_failed'
+	| 'mfa_factor_enrolled'
+	| 'mfa_factor_replaced'
+	| 'mfa_factor_renamed'
+	| 'mfa_factor_change_denied'
+	| 'mfa_recovery_rotated'
+	| 'mfa_recovery_used';
 
 /** Commit security facts with their state change; never include credentials or arbitrary metadata. */
 export async function recordPlatformAuthentication(
