@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { accountCanAuthenticate } from '../../../common/identity/account-state.policy.js';
 import {
 	Injectable,
@@ -15,6 +16,7 @@ import { PlatformTokenService } from './platform-token.service.js';
 import { PlatformTotpService } from './platform-totp.service.js';
 import { effectivePlatformPermissions } from './platform-permission-policy.js';
 import { recordPlatformAuthentication } from './platform-authentication-audit.js';
+import { consumePlatformRecoveryCode } from './platform-recovery-code.js';
 
 export type PlatformMfaVerificationInput = PlatformMfaVerifyDto & {
 	readonly challengeToken: string;
@@ -27,7 +29,7 @@ export class PlatformMfaRejectedException extends UnauthorizedException {
 }
 
 export interface PlatformMfaSuccess {
-	readonly status: 'authenticated';
+	readonly status: 'authenticated' | 'mfa_recovery_required';
 	readonly expiresAt: string;
 	readonly sessionToken: string;
 	readonly expiresAtDate: Date;
@@ -96,6 +98,8 @@ export class PlatformMfaService {
 						where: { tokenDigest: challengeDigest },
 						select: {
 							id: true,
+							purpose: true,
+							mfaVersion: true,
 							platformStaffId: true,
 							expiresAt: true,
 							consumedAt: true,
@@ -107,6 +111,8 @@ export class PlatformMfaService {
 							platformStaff: {
 								select: {
 									status: true,
+									mfaVersion: true,
+									recoveryGeneration: true,
 									user: {
 										select: {
 											id: true,
@@ -147,7 +153,9 @@ export class PlatformMfaService {
 						},
 					});
 					if (
-						current?.consumedAt !== null ||
+						current?.purpose !== 'login' ||
+						current.mfaVersion !== current.platformStaff.mfaVersion ||
+						current.consumedAt !== null ||
 						current.expiresAt <= now ||
 						current.failedAttempts >= current.maxAttempts ||
 						current.platformStaff.status !== PlatformStaffStatus.ACTIVE ||
@@ -185,6 +193,7 @@ export class PlatformMfaService {
 									transaction,
 									input,
 									current.platformStaffId,
+									current.platformStaff.recoveryGeneration,
 									current.platformStaff.totpCredential,
 									acceptedTotp?.timeStep,
 									now,
@@ -224,14 +233,48 @@ export class PlatformMfaService {
 						throw new ConcurrentMfaConsumptionError();
 					}
 
-					const expiresAt = new Date(now.getTime() + this.sessionLifetimeMilliseconds);
+					if (input.method === 'recovery_code') {
+						await transaction.platformAdminSession.updateMany({
+							where: { platformStaffId: current.platformStaffId, revokedAt: null },
+							data: { revokedAt: now, revocationReason: 'recovery_used' },
+						});
+						await transaction.platformMfaChallenge.updateMany({
+							where: {
+								platformStaffId: current.platformStaffId,
+								id: { not: current.id },
+								consumedAt: null,
+							},
+							data: { consumedAt: now },
+						});
+						await recordPlatformAuthentication(
+							transaction,
+							current.platformStaff.user,
+							'mfa_recovery_used',
+							requestId,
+						);
+						await transaction.platformSecurityNotification.create({
+							data: {
+								platformStaffId: current.platformStaffId,
+								recipient: current.platformStaff.user.email,
+								event: 'mfa_recovery_used',
+								requestId: requestId ?? `req_${randomUUID()}`,
+							},
+						});
+					}
+
+					const lifetime = input.method === 'totp' ? this.sessionLifetimeMilliseconds : 300_000;
+					const expiresAt = new Date(now.getTime() + lifetime);
 					await transaction.platformAdminSession.create({
 						data: {
 							platformStaffId: current.platformStaffId,
+							authenticationMethod: input.method,
+							mfaVersion: current.platformStaff.mfaVersion,
 							createdAt: now,
 							tokenDigest: this.tokens.digest(sessionToken),
 							expiresAt,
-							idleExpiresAt: new Date(now.getTime() + this.idleLifetimeMilliseconds),
+							idleExpiresAt: new Date(
+								Math.min(expiresAt.getTime(), now.getTime() + this.idleLifetimeMilliseconds),
+							),
 							lastSeenAt: now,
 							mfaVerifiedAt: now,
 						},
@@ -281,7 +324,7 @@ export class PlatformMfaService {
 			}),
 		);
 		return {
-			status: 'authenticated',
+			status: input.method === 'totp' ? 'authenticated' : 'mfa_recovery_required',
 			expiresAt: outcome.expiresAt.toISOString(),
 			expiresAtDate: outcome.expiresAt,
 			sessionToken,
@@ -339,6 +382,7 @@ export class PlatformMfaService {
 		transaction: Prisma.TransactionClient,
 		input: PlatformMfaVerifyDto,
 		platformStaffId: string,
+		recoveryGeneration: number,
 		totpCredential: {
 			readonly id: string;
 			readonly verifiedAt: Date | null;
@@ -371,15 +415,14 @@ export class PlatformMfaService {
 		if (input.recoveryCode === undefined) {
 			return false;
 		}
-		const consumed = await transaction.platformRecoveryCode.updateMany({
-			where: {
-				platformStaffId,
-				codeDigest: this.tokens.digest(input.recoveryCode.trim().toUpperCase()),
-				usedAt: null,
-			},
-			data: { usedAt: now },
-		});
-		return consumed.count === 1;
+		return consumePlatformRecoveryCode(
+			transaction,
+			this.tokens,
+			platformStaffId,
+			recoveryGeneration,
+			input.recoveryCode,
+			now,
+		);
 	}
 
 	private async consumeEmailOtp(
