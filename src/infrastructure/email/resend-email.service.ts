@@ -9,6 +9,43 @@ export class ResendEmailService {
 	constructor(private readonly config: ConfigService<EnvironmentVariables, true>) {}
 
 	async sendOtp(recipient: string, code: string, deliveryId: string): Promise<void> {
+		await this.send(
+			recipient,
+			'Your Akiba verification code',
+			`Your sign-in code is ${code}. It expires within five minutes. Use only the newest code. Do not share it. If you did not request this, ignore this email.`,
+			`platform-otp/${deliveryId}`,
+		);
+	}
+
+	async sendSecurityNotification(
+		recipient: string,
+		event: string,
+		deliveryId: string,
+	): Promise<string> {
+		const labels: Readonly<Record<string, string>> = {
+			mfa_factor_enrolled: 'An authenticator was enrolled.',
+			mfa_factor_replaced: 'Your authenticator was replaced and prior sessions were invalidated.',
+			mfa_factor_renamed: 'Your authenticator label was changed.',
+			mfa_recovery_rotated:
+				'Your recovery codes were replaced and prior sessions were invalidated.',
+			mfa_recovery_used: 'A recovery code was used for platform authentication or MFA repair.',
+		};
+		const message = labels[event];
+		if (message === undefined) throw unavailable();
+		return this.send(
+			recipient,
+			'Akiba platform security change',
+			`${message} If you did not authorize this change, contact your approved security operator immediately. This message contains no sign-in or recovery credentials.`,
+			`platform-security/${deliveryId}`,
+		);
+	}
+
+	private async send(
+		recipient: string,
+		subject: string,
+		text: string,
+		idempotencyKey: string,
+	): Promise<string> {
 		const key = this.config.get('RESEND_API_KEY', { infer: true });
 		const from = this.config.get('RESEND_FROM_EMAIL', { infer: true });
 		if (key === null || from === null) throw unavailable();
@@ -20,13 +57,13 @@ export class ResendEmailService {
 				headers: {
 					Authorization: `Bearer ${key}`,
 					'Content-Type': 'application/json',
-					'Idempotency-Key': `platform-otp/${deliveryId}`,
+					'Idempotency-Key': idempotencyKey,
 				},
 				body: JSON.stringify({
 					from,
 					to: [recipient],
-					subject: 'Your Akiba verification code',
-					text: `Your sign-in code is ${code}. It expires within five minutes. Use only the newest code. Do not share it. If you did not request this, ignore this email.`,
+					subject,
+					text,
 				}),
 			});
 			if (
@@ -61,6 +98,7 @@ export class ResendEmailService {
 				!/^[0-9a-f-]{36}$/iu.test(data.id)
 			)
 				throw unavailable();
+			return data.id;
 		} catch {
 			// A timeout is an uncertain delivery, not permission for a blind resend.
 			throw unavailable();
