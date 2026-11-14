@@ -100,7 +100,8 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 			userId: '44444444-4444-4444-8444-444444444444',
 			displayName: 'Aline Uwase',
 			email: 'aline@example.com',
-			assurance: 'AAL1',
+			// Synthetic transport contract only; the real service also requires persisted MFA proof.
+			assurance: 'AAL2',
 			expiresAt: new Date('2030-01-01T00:00:00.000Z'),
 			enrollmentChallengeId: '55555555-5555-4555-8555-555555555555',
 			organizations: [],
