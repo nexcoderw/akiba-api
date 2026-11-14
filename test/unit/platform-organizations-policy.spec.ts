@@ -10,9 +10,20 @@ import { organizationResponse } from '../../src/modules/platform/organizations/p
 import { organizationFailure } from '../../src/modules/platform/organizations/platform-organization-errors.js';
 import { organizationPrecondition } from '../../src/modules/platform/organizations/platform-organization-preconditions.js';
 import { ORGANIZATION_RESERVED_SLUGS } from '../../src/modules/platform/organizations/platform-organizations.constants.js';
+import { isOrganizationSlug } from '../../src/common/organization/organization-slug.js';
 import { organizationFixture } from '../fixtures/platform-organizations-database.fixture.js';
 
 describe('platform organization policies and transport DTOs', () => {
+	it.each(['\n', '\r', '\u2028', '\u2029'])(
+		'rejects a final line terminator in the shared slug validator: %p',
+		(terminator) => {
+			expect(isOrganizationSlug(`kimihurura${terminator}`)).toBe(false);
+			for (const reserved of ORGANIZATION_RESERVED_SLUGS) {
+				expect(isOrganizationSlug(`${reserved}${terminator}`)).toBe(false);
+			}
+			expect(isOrganizationSlug('kimihurura')).toBe(true);
+		},
+	);
 	it('normalizes only name edges and preserves explicit safe response fields', async () => {
 		const input = plainToInstance(CreateOrganizationDto, {
 			name: '  Kimihurura Supplies\u0085 ',
