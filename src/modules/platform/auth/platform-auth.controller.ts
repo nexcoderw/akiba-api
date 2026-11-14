@@ -172,10 +172,11 @@ export class PlatformAuthController {
 	@ApiOperation({
 		summary: 'Complete platform administrator MFA',
 		description:
-			'Uses only the HttpOnly pending-challenge cookie and exactly one MFA proof. Atomically consumes the challenge before issuing a fresh host-only HttpOnly session cookie and rotating CSRF. Never accepts a challenge token in JSON.',
+			'Uses only the HttpOnly pending-challenge cookie and exactly one MFA proof. Active TOTP issues a full platform session. Recovery codes issue a five-minute repair-only session; opt-in email OTP never grants platform or MFA-management authority. Atomically consumes the challenge and rotates CSRF. Never accepts a challenge token in JSON.',
 	})
 	@ApiOkResponse({
-		description: 'MFA succeeded and the session cookie was issued.',
+		description:
+			'A full TOTP session or restricted recovery state was issued. Check status before navigation.',
 		type: PlatformMfaVerifiedResponseDto,
 	})
 	@ApiBadRequestResponse({ description: 'The request DTO is invalid.', type: ApiErrorResponseDto })
