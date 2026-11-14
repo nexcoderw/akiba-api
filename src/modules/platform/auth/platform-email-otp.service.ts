@@ -33,6 +33,7 @@ export class PlatformEmailOtpService {
 			where: { tokenDigest: this.tokens.digest(challengeToken) },
 			select: {
 				id: true,
+				purpose: true,
 				createdAt: true,
 				consumedAt: true,
 				expiresAt: true,
@@ -67,7 +68,8 @@ export class PlatformEmailOtpService {
 			},
 		});
 		if (
-			challenge?.consumedAt !== null ||
+			challenge?.purpose !== 'login' ||
+			challenge.consumedAt !== null ||
 			challenge.expiresAt <= now ||
 			challenge.failedAttempts >= challenge.maxAttempts ||
 			challenge.platformStaff.status !== PlatformStaffStatus.ACTIVE ||
@@ -99,6 +101,7 @@ export class PlatformEmailOtpService {
 		const reserved = await this.prisma.platformMfaChallenge.updateMany({
 			where: {
 				id: challenge.id,
+				purpose: 'login',
 				consumedAt: null,
 				expiresAt: { gt: now },
 				failedAttempts: { lt: challenge.maxAttempts },
