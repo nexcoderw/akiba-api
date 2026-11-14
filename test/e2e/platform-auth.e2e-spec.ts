@@ -313,7 +313,7 @@ describe('platform authentication HTTP API (e2e)', () => {
 			.send({ method: 'totp', totpCode: '123456' })
 			.expect(401);
 		expect(response.headers['content-type']).toContain('application/problem+json');
-		expect(response.body).toMatchObject({ code: 'AUTH_MFA_INVALID' });
+		expect(response.body).toMatchObject({ code: 'PLATFORM_MFA_VERIFICATION_FAILED' });
 		expect((response.get('Set-Cookie') ?? []).join(';')).toContain('akiba-platform-challenge=;');
 	});
 
@@ -334,7 +334,7 @@ describe('platform authentication HTTP API (e2e)', () => {
 			await request(requireApplication(application).getHttpServer())
 				.post('/api/v1/platform/auth/login')
 				.set('Origin', ADMIN_ORIGIN)
-				.set('X-Forwarded-For', `192.0.2.${attempt + 1}`)
+				.set('X-Forwarded-For', `192.0.2.${String(attempt + 1)}`)
 				.send({ email: 'admin@example.com', password: 'fictional password' })
 				.expect(200);
 		}
