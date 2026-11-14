@@ -310,7 +310,10 @@ interface SessionRecord {
 	idleExpiresAt: Date;
 	revokedAt: Date | null;
 	mfaVerifiedAt: Date;
+	authenticationMethod: string;
+	mfaVersion: number;
 	platformStaff: {
+		mfaVersion: number;
 		id: string;
 		status: PlatformStaffStatus;
 		user: {
@@ -339,7 +342,10 @@ function createSession(): SessionRecord {
 		idleExpiresAt: new Date(now + 1_800_000),
 		revokedAt: null,
 		mfaVerifiedAt: new Date(now - 60_000),
+		authenticationMethod: 'totp',
+		mfaVersion: 1,
 		platformStaff: {
+			mfaVersion: 1,
 			id: 'fictional-platform-staff',
 			status: PlatformStaffStatus.ACTIVE,
 			user: {
