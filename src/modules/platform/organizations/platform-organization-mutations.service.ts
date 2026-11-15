@@ -24,6 +24,7 @@ import { ORGANIZATION_TRANSACTION_OPTIONS } from './platform-organizations.const
 import { PlatformSessionService } from '../auth/platform-session.service.js';
 import type { PlatformPrincipal } from '../auth/platform-auth.types.js';
 import { PLATFORM_PERMISSION } from '../auth/platform-permission.constants.js';
+import { ApiProblemException } from '../../../common/errors/api-problem.exception.js';
 
 @Injectable()
 export class PlatformOrganizationMutationsService {
@@ -129,6 +130,10 @@ export class PlatformOrganizationMutationsService {
 						'action' in command
 							? lifecycleStatus(previous.status, command.action)
 							: previous.status;
+					// No approved readiness contract currently proves owner MFA and onboarding completion.
+					// A platform permission authorizes the request, not the missing activation evidence.
+					if ('action' in command && command.action === 'activation')
+						throw new ApiProblemException('SERVICE_UNAVAILABLE');
 					const data =
 						'name' in command
 							? { name: command.name, updatedAt }
