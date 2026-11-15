@@ -9,13 +9,13 @@ import { OwnerLoginAttemptService } from '../../src/modules/owner/auth/owner-log
 import { OwnerLoginService } from '../../src/modules/owner/auth/owner-login.service.js';
 import { OwnerSessionService } from '../../src/modules/owner/auth/owner-session.service.js';
 import { OwnerTokenService } from '../../src/modules/owner/auth/owner-token.service.js';
+import { ApiProblemException } from '../../src/common/errors/api-problem.exception.js';
 
 describe('owner login assurance boundary with the real session service', () => {
 	const findUnique = jest.fn<() => Promise<unknown>>();
 	const transaction = jest.fn<() => Promise<unknown>>();
 	const createToken = jest.fn<() => string>();
-	const recordFailure = jest.fn<() => void>();
-	const clearAccount = jest.fn<() => void>();
+	const consume = jest.fn<() => void>();
 	let module: TestingModule;
 	let service: OwnerLoginService;
 
@@ -37,9 +37,7 @@ describe('owner login assurance boundary with the real session service', () => {
 				{
 					provide: OwnerLoginAttemptService,
 					useValue: {
-						assertAllowed: () => undefined,
-						recordFailure,
-						clearAccount,
+						consume,
 					},
 				},
 			],
@@ -52,6 +50,17 @@ describe('owner login assurance boundary with the real session service', () => {
 	});
 	beforeEach(() => {
 		jest.clearAllMocks();
+	});
+	it('rejects exhausted admission before identity lookup or session work', async () => {
+		consume.mockImplementationOnce(() => {
+			throw new ApiProblemException('RATE_LIMITED');
+		});
+		await expect(
+			service.login({ email: 'owner@example.com', password: 'fictional password' }, '192.0.2.1'),
+		).rejects.toMatchObject({ publicCode: 'RATE_LIMITED' });
+		expect(findUnique).not.toHaveBeenCalled();
+		expect(transaction).not.toHaveBeenCalled();
+		expect(createToken).not.toHaveBeenCalled();
 	});
 
 	it.each([true, false])(
@@ -89,8 +98,7 @@ describe('owner login assurance boundary with the real session service', () => {
 			).rejects.toMatchObject({ status: 401, response: OWNER_AUTH_ERROR.invalidCredentials });
 			expect(createToken).not.toHaveBeenCalled();
 			expect(transaction).not.toHaveBeenCalled();
-			expect(clearAccount).not.toHaveBeenCalled();
-			expect(recordFailure).toHaveBeenCalledTimes(1);
+			expect(consume).toHaveBeenCalledTimes(1);
 		},
 	);
 });
