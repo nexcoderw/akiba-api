@@ -250,25 +250,22 @@ describe('organization service contracts (adapter fake, not PostgreSQL)', () => 
 		).rejects.toMatchObject({ status: 412 });
 		database.updateMany.mockResolvedValue({ count: 0 });
 		await expect(
-			writes.lifecycle(context, principal, ORGANIZATION_ID, 'activation', ORGANIZATION_TIME),
+			writes.lifecycle(context, principal, ORGANIZATION_ID, 'archival', ORGANIZATION_TIME),
 		).rejects.toMatchObject({ status: 412 });
 		expect(record).not.toHaveBeenCalled();
 	});
-	it('sets activation time but retains history and does not create unrelated identities', async () => {
-		database.findUnique.mockResolvedValueOnce(organizationFixture()).mockResolvedValueOnce({
-			...organizationFixture(),
-			status: OrganizationStatus.ACTIVE,
-		});
-		await writes.lifecycle(context, principal, ORGANIZATION_ID, 'activation', ORGANIZATION_TIME);
-		expect(database.updateMany.mock.calls[0]?.[0]).toMatchObject({
-			data: {
-				status: OrganizationStatus.ACTIVE,
-				activatedAt: record.mock.calls[0]?.[1].occurredAt,
-			},
-		});
-		expect(record.mock.calls[0]?.[1].resultingStatus).toBe(OrganizationStatus.ACTIVE);
-		expect(database.userCount).not.toHaveBeenCalled();
-	});
+	it.each([OrganizationStatus.PENDING, OrganizationStatus.SUSPENDED])(
+		'denies activation from %s without the missing approval and owner readiness evidence',
+		async (status) => {
+			database.findUnique.mockResolvedValue({ ...organizationFixture(), status });
+			await expect(
+				writes.lifecycle(context, principal, ORGANIZATION_ID, 'activation', ORGANIZATION_TIME),
+			).rejects.toMatchObject({ publicCode: 'SERVICE_UNAVAILABLE' });
+			expect(database.updateMany).not.toHaveBeenCalled();
+			expect(record).not.toHaveBeenCalled();
+			expect(database.userCount).not.toHaveBeenCalled();
+		},
+	);
 	it.each([OrganizationStatus.PENDING, OrganizationStatus.ACTIVE, OrganizationStatus.SUSPENDED])(
 		'archives %s with a retained record and an atomic audit event',
 		async (status) => {
