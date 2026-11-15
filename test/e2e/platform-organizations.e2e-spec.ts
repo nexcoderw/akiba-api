@@ -178,7 +178,7 @@ describe('organization HTTP security (real guards, fake persistence)', () => {
 		expect(database.findMany).toHaveBeenCalled();
 	});
 	it.each(ROUTES.filter((route) => route.method !== 'get'))(
-		'allows trusted system owners to perform audited mutations: $method $path',
+		'enforces mutation policy even for trusted system owners: $method $path',
 		async (route) => {
 			database.sessionFindUnique.mockResolvedValue({
 				...session,
@@ -196,6 +196,13 @@ describe('organization HTTP security (real guards, fake persistence)', () => {
 				},
 			});
 			prepareMutation(route);
+			if (route.permission === ORGANIZATION_PERMISSION.activate) {
+				const response = await call(route).expect(503);
+				expect(response.body).toMatchObject({ code: 'SERVICE_UNAVAILABLE' });
+				expect(database.updateMany).not.toHaveBeenCalled();
+				expect(database.auditCreate).not.toHaveBeenCalled();
+				return;
+			}
 			await call(route).expect(route.path === ROOT ? 201 : 200);
 			expect(database.auditCreate).toHaveBeenCalledTimes(1);
 			expect(database.auditCreate.mock.calls[0]?.[0]).toMatchObject({
@@ -301,6 +308,12 @@ describe('organization HTTP security (real guards, fake persistence)', () => {
 			expect(database.create).not.toHaveBeenCalled();
 			expect(database.updateMany).not.toHaveBeenCalled();
 			prepareMutation(route);
+			if (route.permission === ORGANIZATION_PERMISSION.activate) {
+				await call(route).expect(503);
+				expect(database.auditCreate).not.toHaveBeenCalled();
+				expect(database.updateMany).not.toHaveBeenCalled();
+				return;
+			}
 			database.auditCreate.mockRejectedValueOnce(new Error('private audit failure'));
 			const errorLog = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
 			const accessLog = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
