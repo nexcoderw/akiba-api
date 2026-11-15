@@ -37,11 +37,13 @@ jobs:
           ref: ${{ env.DB_SOURCE_REVISION }}
           token: ${{ secrets.DB_REPOSITORY_READ_TOKEN }}
           path: db
+          persist-credentials: false
 
       - name: Check out API
         uses: actions/checkout@v4
         with:
           path: api
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
