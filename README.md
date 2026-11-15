@@ -533,3 +533,166 @@ Regression cases cover AAL1, absent/future/old MFA evidence and valid AAL2 live 
 authored but not executed. Managed-owner/BYPASSRLS isolation, production deployment/secret management,
 distributed throttling, recovery governance and live migration/integration verification remain release
 blockers. Final adversarial hardening can inspect these gaps, but Step 13 is not a production sign-off.
+
+## Step 13 review: production NO-GO
+
+Review date: 2026-11-15. Inspected main baselines:
+API `34eaf888a7422c0d62c37582e680af20ea05c807` and
+DB `06e62b3e220b2b952197f9042a4cd9a4cc4eb8b5`. Cached origin/main matched;
+remote freshness was not fetched. Initial working trees were clean. Installed dependencies read from
+disk: Nest 11.2.7, TypeScript 5.9.3, Prisma/client 7.10.0, approved sibling DB package 0.2.0.
+These are audit baselines, not release approvals. Earlier milestone notes above are historical;
+the restrictions and gates below describe the current source.
+
+Implementation status: PARTIALLY COMPLETE. Release: NO-GO. No npm, Prisma, CI, database, dependency
+audit, secret-history scanner or deployed HTTP checks were executed by the agent. Source inspection
+and authored regression assertions do not establish passing runtime security or formal compliance.
+
+Framework: [OWASP ASVS 5.0.0](https://asvs.owasp.org/downloads/),
+[API Security Top 10](https://owasp.org/www-project-api-security/),
+[Authentication](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html),
+[Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html),
+[Authorization](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html),
+[Forgot Password](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html),
+[Password Storage](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html),
+and [NIST SP 800-63B-4](https://pages.nist.gov/800-63-4/sp800-63b.html).
+The matrix maps control themes toward an L2-style baseline; it is not a complete per-requirement
+ASVS assessment or certification.
+
+### Findings
+
+| ID      | Severity / affected component                                 | Correction and reproduction evidence                                                                                                                                                                                                                                                                                                                            | Verification / remaining risk                                                                                                                                                                                                                                                                                       |
+| ------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AK13-01 | HIGH / API owner login admission                              | Previously admission checked before async work and counted failures later; capacity pruning could evict live counters. `owner-login-attempt.service.ts` now consumes quota synchronously before lookup/hashing, prunes expired entries only, rejects new entries at capacity and never clears counters on success. Controller uses Express's trusted client IP. | New `owner-login-attempt.service.spec.ts` asserts account/network limits, 2 of 20 concurrent admissions, 10,000-key capacity preservation and expiry. Login regression denies exhausted admission before lookup. NOT VERIFIED; restart/replica persistence remains absent and capacity denial affects availability. |
+| AK13-02 | LOW / API authority parsing                                   | `request-authority.ts` used a dollar anchor accepting final line terminators before URL normalization. It now requires absolute end. `organization-routing.spec.ts` adds final LF, CR and Unicode separators.                                                                                                                                                   | NOT VERIFIED; no remotely exploitable header injection is claimed. Proxy/header parsing is independently required.                                                                                                                                                                                                  |
+| AK13-03 | MEDIUM / API and DB CI                                        | Checkout retained credentials by default for later build/test steps. Every checkout now sets `persist-credentials: false`.                                                                                                                                                                                                                                      | Diff reviewed; CI NOT VERIFIED. This does not make untrusted PR code with secrets safe; token scope, action pinning and runner trust still require review.                                                                                                                                                          |
+| AK13-04 | CRITICAL / API organization activation                        | A valid PENDING/SUSPENDED transition could activate without an approval/readiness contract proving verified owner enrollment and MFA. `platform-organization-mutations.service.ts` now rejects valid activation/reactivation with SERVICE_UNAVAILABLE before update/audit. Permission, precondition and invalid-transition checks remain.                       | Unit regressions cover both source states; HTTP regressions deny even a trusted system owner without state writes or success audit. NOT VERIFIED. Activation is intentionally unavailable until readiness is implemented.                                                                                           |
+| AK13-05 | CRITICAL requirement / incomplete authentication and recovery | Complete bootstrap, organization MFA/step-up, approval/onboarding, password recovery and public role APIs remain missing or restricted.                                                                                                                                                                                                                         | FAIL as complete milestones. Platform MFA/internal RBAC cannot substitute; keep affected flows closed.                                                                                                                                                                                                              |
+| AK13-06 | CRITICAL requirement / DB isolation                           | No reviewed migration supplies tenant RLS policies. Runtime uses the approved managed-owner arrangement; actual effective memberships, BYPASSRLS, ownership and FORCE RLS were not queried.                                                                                                                                                                     | Isolation requirement FAIL from source; live attributes NOT VERIFIED. Requires an approved independently enforced isolation design.                                                                                                                                                                                 |
+| AK13-07 | HIGH requirement / production operations                      | Durable shared throttling, deployed routing/TLS, secret custody, sender/queue operations, alerts, incident ownership and demonstrated restore evidence are absent or unverified.                                                                                                                                                                                | NOT VERIFIED; production-wide durable limiter is absent. Release remains blocked.                                                                                                                                                                                                                                   |
+
+Actual runtime BYPASSRLS is explicitly NOT VERIFIED. [PostgreSQL's documentation](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)
+states that BYPASSRLS bypasses row security; [Neon's role documentation](https://neon.com/docs/manage/roles)
+describes elevated managed-role memberships. Neither proves this deployment's exact live attributes.
+Composite FKs prevent invalid relationships; query filters and transaction-local tenant settings do
+not independently prevent a privileged database identity reading other tenants' rows.
+
+### Threat model
+
+Assets: global users/passwords, platform authority, organization memberships/roles, opaque sessions,
+TOTP ciphertext/recovery verifiers, invitations, organizations, audit events and encryption/signing
+keys. Reset material and tenant business data are planned assets where their endpoints are absent.
+Boundaries: internet/browser, reviewed proxy, Nest API, workers/notification provider, canonical DB
+package/Neon, global identity, platform administration and each separate organization.
+
+| Actor / abuse                                                          | Actual source controls and test evidence                                                                                                                  | Residual risk                                                                                         |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Anonymous credential attacker floods work or churns identities         | New admission regressions; bounded Argon2 in `password-hashing.service.ts`; global HTTP limiter.                                                          | Single-process state, restart reset and capacity outage.                                              |
+| Malicious tenant admin or compromised account changes tenant IDs/roles | Issued contexts, scoped predicates, live authorization, composite FKs; tenant-security HTTP and organization authorization/access-management unit suites. | Live isolation and complete public RBAC/step-up remain missing/unverified.                            |
+| Malicious sibling domain or stolen session changes Host/Origin         | Exact Origin/authority, sealed host-only cookies, selected membership checks; routing/cookie/tenant suites.                                               | Same-origin proxy/DNS/TLS deployment and central-API cookie isolation need operator evidence.         |
+| Stolen invitation/pending MFA/recovery proof seeks privileged access   | Purpose-bound digests, expiry/attempt limits, conditional consumption and restricted assurance; MFA/acceptance tests.                                     | Owner MFA/bootstrap completion, reset proofs and all-factor-loss governance remain absent.            |
+| Compromised platform operator, worker or CI dependency                 | Explicit platform permissions, activation readiness denial, transactional audit, sanitized logger and checkout credential opt-out.                        | DB owner DDL powers, runner/secret-manager trust and operational incident controls remain unresolved. |
+
+### Source endpoint inventory
+
+Paths are relative to `/api/v1`. This inventories declared controller operations; human HTTP/OpenAPI
+tests must confirm runtime registration. Automatic HEAD/OPTIONS and conditional Swagger routes are
+not separate business entries. No public Gym, password-reset or role-management controller exists.
+Bootstrap and security/invitation workers are CLI-only.
+
+| Methods and paths                                                                                                      | Boundary and authority                                                                                                           |
+| ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| GET `health/live`                                                                                                      | Public liveness only, no DB readiness.                                                                                           |
+| POST `platform/auth/login`                                                                                             | Public credential entry, exact admin Origin; bounded admission/hash work; pending proof only.                                    |
+| POST `platform/auth/mfa/email`, `platform/auth/mfa/verify`                                                             | Restricted login challenge plus Origin/CSRF; TOTP for full platform access.                                                      |
+| GET `platform/auth/me`, `platform/auth/session`                                                                        | Full platform session and admin Origin.                                                                                          |
+| POST `platform/auth/logout`                                                                                            | Public/restricted lifecycle handler; Origin/CSRF and conditional revocation.                                                     |
+| POST `platform/auth/step-up/start`, `platform/auth/step-up/verify`                                                     | Gated own full/repair session and action-bound reauthentication.                                                                 |
+| GET `platform/auth/mfa/factors`                                                                                        | Gated own full/repair session, Origin and CSRF.                                                                                  |
+| POST `platform/auth/mfa/totp/enroll`, `platform/auth/mfa/totp/confirm`                                                 | Session-bound enrollment proof; no bootstrap activation.                                                                         |
+| POST `platform/auth/mfa/factors/:id/replace`, `platform/auth/mfa/factors/:id/replace/confirm`                          | Own factor and replacement proof; new factor confirmation.                                                                       |
+| PATCH / DELETE `platform/auth/mfa/factors/:id`                                                                         | Own purpose-bound proof; final-factor removal denied.                                                                            |
+| POST `platform/auth/mfa/recovery-codes/regenerate`                                                                     | Password/TOTP proof; repair-only sessions denied.                                                                                |
+| GET `platform/dashboard/summary`                                                                                       | Full platform session and `platform.dashboard.read`.                                                                             |
+| GET `platform/organizations`, GET `platform/organizations/:id`                                                         | `platform.organizations.read`.                                                                                                   |
+| POST `platform/organizations`, PATCH `platform/organizations/:id`                                                      | Corresponding create/update permission, Origin/CSRF and durable audit.                                                           |
+| POST `platform/organizations/:id/activation`                                                                           | Activate permission, Origin/CSRF/precondition; valid requests blocked by missing readiness.                                      |
+| POST `platform/organizations/:id/suspension`, `platform/organizations/:id/archival`                                    | Corresponding suspend/archive permission, Origin/CSRF/precondition and audit.                                                    |
+| POST / GET `platform/organizations/:organizationId/owner-invitations`                                                  | Corresponding `platform.organizations.owners.invite` / `.read`, scoped organization.                                             |
+| POST `platform/organizations/:organizationId/owner-invitations/:invitationId/delivery`, `.../:invitationId/revocation` | Corresponding `.owners.send-invitation` / `.owners.revoke-invitation`, scoped parents, Origin/CSRF and applicable delivery gate. |
+| POST `owner-invitations/preview`, `owner-enrollment/challenges`                                                        | Public restricted proof entry; trusted portal Origin.                                                                            |
+| POST `owner/auth/verify`, `owner-enrollment/registrations`                                                             | Invitation-bound credential enrollment; restricted provisional AAL1 only.                                                        |
+| POST `owner-enrollment/acceptances`                                                                                    | Enrollment session/CSRF, AAL2 and recent persisted MFA proof; no working owner MFA issuer yet.                                   |
+| POST `owner/auth/login`                                                                                                | Public credentials; currently fails closed because AAL1 cannot issue operational access.                                         |
+| GET `owner/auth/session`, POST `owner/auth/logout`                                                                     | Own origin-sealed session; logout requires Origin/CSRF and revokes server state.                                                 |
+| GET `owner/organizations/:organizationId/dashboard`                                                                    | Full tenant session, selected active organization/membership, scoped owner identity read.                                        |
+
+### Verification matrix and release gates
+
+Statuses below assess the complete requirement; positive source controls do not equal an automated
+PASS. Test names identify assertions to execute, not results obtained in this review.
+
+| Framework theme / requirement                                        | Evidence                                                                                                 | Status         | Severity / action                                                           |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------- | --------------------------------------------------------------------------- |
+| ASVS authentication / API2: platform credentials and MFA             | Platform login/MFA/session and bootstrap source; crypto/auth HTTP tests.                                 | NOT VERIFIED   | HIGH: execute checks and finish first-owner enrollment.                     |
+| ASVS sessions: expiry, revocation, cookies and CSRF                  | Platform/owner session services, cookie/origin guards; session/cookie/tenant suites.                     | NOT VERIFIED   | HIGH: copied-cookie, real revocation and proxy tests.                       |
+| ASVS authorization / API1/API5: tenant scope and service enforcement | Tenant and organization authorization, composite schema FKs; tenant and access-management tests.         | NOT VERIFIED   | CRITICAL: live relationships and independent read isolation verification.   |
+| ASVS validation / API3: safe DTOs and errors                         | Global ValidationPipe, allowlisted DTOs, exception filter; problem-details and organization HTTP suites. | NOT VERIFIED   | HIGH: malformed/oversized input, mass assignment and redaction tests.       |
+| NIST rate limiting / API4: bounded work                              | AK13-01, platform limiter, shared bounded Argon2 service.                                                | NOT VERIFIED   | HIGH: run admission/capacity cases; deliver durable production-wide limits. |
+| ASVS MFA management/recovery                                         | Encrypted TOTP, versioned recovery verifiers, proof binding and DB triggers; MFA/guarded DB tests.       | NOT VERIFIED   | HIGH: migration, replay/race and rollback verification.                     |
+| Organization MFA, bootstrap completion and password recovery         | Missing owner verifier, completed bootstrap and reset protocol.                                          | FAIL           | CRITICAL: keep affected operations closed; complete missing flows.          |
+| Operational role APIs and organization purpose-bound step-up         | Internal workflows exist; public role APIs and organization step-up absent.                              | FAIL           | HIGH: incomplete Step 12 milestone.                                         |
+| PostgreSQL/Neon isolation                                            | Tenant RLS policies absent; live role attributes not queried.                                            | FAIL           | CRITICAL: owner-approved least-privilege isolation and independent tests.   |
+| API8: CI, dependency and secret controls                             | Credential persistence disabled in both workflows; sanitized logger/config source.                       | NOT VERIFIED   | HIGH: CI, dependency audit and approved redacted secret/history scan.       |
+| Notifications, backups and incident operations                       | Adapter/outbox code; no live delivery, restore, monitoring or escalation evidence.                       | NOT VERIFIED   | HIGH: independently demonstrate operations.                                 |
+| Inventory business endpoint tests                                    | No inventory endpoints implemented.                                                                      | NOT APPLICABLE | Scope exclusion only; future modules require separate verification.         |
+
+| Mandatory production gate     | Status       | Remaining evidence/action                                                                    |
+| ----------------------------- | ------------ | -------------------------------------------------------------------------------------------- |
+| 1 Platform authentication     | FAIL         | Complete bootstrap and verify privileged MFA/session paths.                                  |
+| 2 Organization authentication | FAIL         | Real owner MFA, approval/readiness and tenant login.                                         |
+| 3 Tenant isolation            | FAIL         | Approved independent runtime isolation; live effective privileges/policies and attack tests. |
+| 4 Authorization               | FAIL         | Complete role APIs, organization step-up and owner concurrency/invalidation verification.    |
+| 5 Account recovery            | FAIL         | Real reset protocol, non-enumeration, MFA preservation and global invalidation tests.        |
+| 6 Session security            | NOT VERIFIED | Offline and guarded live cookie/expiry/revocation/proxy checks.                              |
+| 7 Abuse protection            | FAIL         | Durable production-wide limiter, outage policy and monitoring.                               |
+| 8 Secrets and infrastructure  | NOT VERIFIED | Secret custody, DNS/TLS/proxy, operator/debug surface review.                                |
+| 9 Validation and tests        | NOT VERIFIED | Human code checks, dependency/secret review, migrations and live suites.                     |
+| 10 Operations                 | NOT VERIFIED | Audit delivery, alerts, incident ownership, demonstrated restore and forward recovery.       |
+
+### Owner decisions and operator checklist
+
+REQUIRES OWNER APPROVAL: a separately scoped non-owner/non-BYPASSRLS runtime identity if needed
+for independently enforced isolation. Proposal: inventory effective ownership/grants; review tenant
+policies and narrow control-plane/worker access; authorize role/privilege changes; test on the existing
+synthetic development branch; verify compatible clients and rollback/forward recovery; then approve
+a protected production rollout. No role/grant changes are executed. FORCE RLS alone does not constrain
+BYPASSRLS, and the owner connection must not silently remain as an isolation fallback.
+
+Other owner decisions: shared limiter/outage policy, secret manager, sender/provider/reconciliation
+operator, same-origin proxy/DNS/TLS architecture, incident/alert ownership, backup access and restore
+procedure, CI token scope/action trust, and protected production migration process. No blanket flag
+can replace these controls or the missing code.
+
+Before reconsidering GO, the operator must:
+
+1. Record reviewed release SHAs after fixes and pin API CI AKIBA_DB_SOURCE_REVISION to that DB SHA.
+2. Complete missing authentication/recovery/role workflows without weakening existing gates.
+3. Provision independent peppers/TOTP/invitation keys, real dummy Argon2 hash and reviewed password
+   corpus through secret management. Validate exact origins, HTTPS cookies and trusted proxy CIDRs;
+   keep bootstrap/delivery/management flags disabled until their own prerequisites pass.
+4. Run DB validate/generate/build and offline checks before API checks; run dependency audits and
+   an approved redacted history/secret scan. Protect output and review all failures.
+5. Review development status/diff, custom SQL/checksums and guarded integration prerequisites. Stop
+   workers for live suites. No production SQL until a reviewed deployment is separately approved.
+6. Verify same-origin tenant routing, host-only cookies, exact CORS/Origin/CSRF, trusted forwarding,
+   cross-tenant copied-cookie rejection and live account/organization/membership revocation.
+7. Demonstrate provider acceptance/delivery, queue age monitoring and uncertain-send reconciliation;
+   never blindly resend. Demonstrate backup/PITR access and a synthetic restore rehearsal.
+8. Record forward-recovery SQL and compatible app rollback; reverting code does not undo migrations.
+   Check liveness separately from authenticated DB readiness. Verify redacted audit access, alerts,
+   named escalation ownership and compromised-key/session revocation procedures.
+9. Supply passing evidence for every gate and independent review before production approval.
+
+Only controlled synthetic non-production development may proceed. Later inventory modules must not
+assume incomplete authentication/RBAC/recovery foundations have been delivered or certified.
