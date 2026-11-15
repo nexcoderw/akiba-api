@@ -45,7 +45,7 @@ export class OwnerLoginService {
 	): Promise<OwnerLoginSuccess> {
 		const email = normalizeEmailIdentity(input.email);
 		if (email === null) throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidCredentials);
-		this.attempts.assertAllowed(ipAddress, email, now.getTime());
+		this.attempts.consume(ipAddress, email, now.getTime());
 		let identity: Awaited<ReturnType<typeof this.readIdentity>>;
 		try {
 			identity = await this.readIdentity(email, organizationSlug);
@@ -76,7 +76,6 @@ export class OwnerLoginService {
 			identity.platformStaff !== null ||
 			membership === undefined
 		) {
-			this.attempts.recordFailure(ipAddress, email, now.getTime());
 			this.logger.warn(JSON.stringify({ event: 'owner_login_rejected' }));
 			throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidCredentials);
 		}
@@ -88,7 +87,6 @@ export class OwnerLoginService {
 				OwnerSessionAssurance.AAL1,
 				now,
 			);
-			this.attempts.clearAccount(email);
 			this.logger.log(JSON.stringify({ event: 'owner_session_created', userId: identity.id }));
 			return {
 				status: 'authenticated',
@@ -99,7 +97,6 @@ export class OwnerLoginService {
 			};
 		} catch (error: unknown) {
 			if (error instanceof UnauthorizedException) {
-				this.attempts.recordFailure(ipAddress, email, now.getTime());
 				throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidCredentials);
 			}
 			if (error instanceof ApiProblemException) throw error;
