@@ -177,7 +177,7 @@ export class PlatformOrganizationsController {
 	@ApiOperation({
 		summary: 'Activate an organization',
 		description:
-			'Requires platform.organizations.activate, admin Origin and CSRF. Only PENDING/SUSPENDED to ACTIVE. Repeated activation or ARCHIVED returns 409 with a current precondition; stale timestamp returns 412. No entitlements are granted. Audit failure returns 503 and rolls back the mutation.',
+			'Requires platform.organizations.activate, admin Origin, CSRF and a current precondition. Valid PENDING/SUSPENDED activation requests currently return SERVICE_UNAVAILABLE without mutation: approval/readiness and verified owner MFA evidence are not implemented. Invalid transitions remain 409 and stale preconditions 412. Platform Owner authority cannot bypass this readiness gate.',
 	})
 	@ApiOkResponse({ type: OrganizationResponseDto })
 	@ApiNotFoundResponse({ type: ApiErrorResponseDto })
