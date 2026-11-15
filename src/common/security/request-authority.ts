@@ -9,7 +9,7 @@ export function normalizedAuthority(value: unknown): string | null {
 	if (
 		typeof value !== 'string' ||
 		value.length > 260 ||
-		!/^(?:[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?|\[::1\])(?::[0-9]{1,5})?$/iu.test(value)
+		!/^(?:[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?|\[::1\])(?::[0-9]{1,5})?(?![\s\S])/iu.test(value)
 	)
 		return null;
 	try {
