@@ -77,7 +77,7 @@ export class OwnerAuthController {
 	): Promise<OwnerAuthenticatedResponseDto> {
 		const result = await this.loginService.login(
 			input,
-			request.socket.remoteAddress ?? 'unavailable',
+			request.ip ?? request.socket.remoteAddress ?? 'unavailable',
 			undefined,
 			request.ownerOrganizationSlug,
 		);
