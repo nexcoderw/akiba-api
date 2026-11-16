@@ -372,7 +372,7 @@ describe('organization HTTP security (real guards, fake persistence)', () => {
 				if (operation === undefined) continue;
 				expect(operation.responses['401']).toBeDefined();
 				expect(operation.responses['403']).toBeDefined();
-				if (method !== 'get') expect(operation.description).toContain('503');
+				if (method !== 'get') expect(operation.responses['503']).toBeDefined();
 			}
 		}
 	});
