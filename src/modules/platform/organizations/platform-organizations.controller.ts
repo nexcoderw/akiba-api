@@ -63,7 +63,8 @@ import { PlatformOrganizationsService } from './platform-organizations.service.j
 @ApiTooManyRequestsResponse({ type: ApiErrorResponseDto })
 @ApiServiceUnavailableResponse({
 	type: ApiErrorResponseDto,
-	description: 'Persistence unavailable, or mutations blocked by ORGANIZATION_AUDIT_UNAVAILABLE.',
+	description:
+		'A required service is unavailable, activation evidence is incomplete, or an audit write cannot be committed. Protected mutations are not partially applied.',
 })
 @UseGuards(PlatformSessionGuard, PlatformOriginCsrfGuard, PlatformPermissionGuard)
 @AccessBoundary('platform')
