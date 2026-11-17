@@ -99,7 +99,10 @@ export function sanitizedLog(message: unknown, level: LogLevel): Readonly<Record
 }
 
 export class SanitizedLogger implements LoggerService {
-	private readonly sink = new ConsoleLogger('Akiba', { json: true, colors: false });
+	private readonly sink = new ConsoleLogger('Akiba', {
+		json: process.env.NODE_ENV !== 'development',
+		colors: process.env.NODE_ENV === 'development',
+	});
 	log(message: unknown): void {
 		this.sink.log(sanitizedLog(message, 'log'));
 	}
