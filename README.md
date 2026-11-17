@@ -97,7 +97,10 @@ allowlist without application credentials, inherited Node hooks or npm credentia
 The helper installs locked dependencies with `npm ci`, checks matching stable Prisma 7 versions,
 generates/builds the canonical DB source without a connection URL, builds the API, installs only
 runtime dependencies in the final sibling packages and checks public database exports without
-constructing a client. It copies no `.env` files and executes no migrations or server. Existing
+constructing a client. Because Node resolves a linked sibling from its real directory, the helper
+links each declared DB peer dependency to the API runtime installation after the final API install.
+This shares NestJS, reflect-metadata and RxJS instances without retaining development dependencies.
+Missing API runtime peers fail the build; no package manifests or lockfiles are rewritten. It copies no `.env` files and executes no migrations or server. Existing
 `.render` output is replaced only if it has this helper's ownership marker; an unrecognized directory
 fails closed. Build failure prevents a successful artifact. Runtime starts the compiled `dist/main.js`
 through the existing `start:prod` script, from `.render/api`.
