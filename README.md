@@ -53,6 +53,102 @@ npm run build
 Run `npm run start:dev` only after configuring the development environment. The API never applies
 migrations at startup. Agents edit and inspect files; humans execute checks and Git writes.
 
+## Render build and runtime
+
+Use Node `>=22.12.0 <23`. `.node-version` selects major 22 locally and in CI. In Render,
+set **NODE_VERSION=22** explicitly: an existing dashboard value takes precedence over version files.
+Remove any old Node 26 override. The local terminal must also switch to Node 22 before verification.
+See [Render Node version selection](https://render.com/docs/node-version).
+
+The failed command `npm install --include=dev && npx prisma generate && npm run build` invokes
+Prisma in the wrong repository. This API has no Prisma schema or direct CLI dependency. A missing
+local command permits [npx to fetch a package](https://docs.npmjs.com/cli/v11/commands/npm-exec/),
+which explains the reported incompatible Prisma 8 command. The inspected canonical DB dependency
+uses matching Prisma CLI/Client **7.10.0**. Keep generation in that repository; do not install Prisma
+8 or use `prisma contract emit` here. No API package lifecycle script runs Prisma generation.
+
+The supported integration remains `file:../db`. The local DB package declares `dist` in its package
+files, including its compiled generated client, but registry artifact availability/authorization was
+not verified. Do not replace the dependency with an assumed published version. A prepared sibling
+allows the ordinary API build `npm ci --include=dev && npm run build`; a standalone Render checkout
+needs the sibling prepared first. [Render retains only the service root](https://render.com/docs/monorepo-support),
+so the deployment helper stages both packages inside `.render`, preserving their sibling paths.
+
+Configure a native Node Render service using the API repository with its Root Directory blank:
+
+| Setting                  | Value                                                                   |
+| ------------------------ | ----------------------------------------------------------------------- |
+| Build Command            | `node scripts/render-build.mjs`                                         |
+| Start Command            | `npm --prefix .render/api run start:prod`                               |
+| NODE_VERSION             | `22`                                                                    |
+| NODE_ENV                 | `production`                                                            |
+| HOST                     | `0.0.0.0`                                                               |
+| PORT                     | Render-provided port; do not hardcode it                                |
+| AKIBA_DB_SOURCE_REVISION | Reviewed 40-character DB commit, matching API CI compatibility evidence |
+| DB_REPOSITORY_READ_TOKEN | Protected GitHub credential with read-only contents access to akiba-db  |
+
+Replace the old Build Command completely. Copy the reviewed revision from the GitHub **repository
+variable** `AKIBA_DB_SOURCE_REVISION` into Render; these settings do not synchronize automatically.
+Never use a branch name as the revision. Store the token as a Render secret, never in source or URLs.
+The helper passes it only to Git through temporary process configuration, suppresses Git diagnostics,
+and does not persist it in the fetched repository. Dependency subprocesses receive a small environment
+allowlist without application credentials, inherited Node hooks or npm credential configuration.
+
+The helper installs locked dependencies with `npm ci`, checks matching stable Prisma 7 versions,
+generates/builds the canonical DB source without a connection URL, builds the API, installs only
+runtime dependencies in the final sibling packages and checks public database exports without
+constructing a client. It copies no `.env` files and executes no migrations or server. Existing
+`.render` output is replaced only if it has this helper's ownership marker; an unrecognized directory
+fails closed. Build failure prevents a successful artifact. Runtime starts the compiled `dist/main.js`
+through the existing `start:prod` script, from `.render/api`.
+
+Supply production application configuration through Render, following `.env.production.example`:
+`DATABASE_URL`, `API_PUBLIC_ORIGIN`, `CORS_ORIGINS`, `PLATFORM_ADMIN_ORIGIN`,
+`PLATFORM_AUTH_TOKEN_PEPPER`, `PLATFORM_AUTH_DUMMY_PASSWORD_HASH`, `PLATFORM_TOTP_KEYRING`,
+`PLATFORM_TOTP_ACTIVE_KEY_ID`, `OWNER_AUTH_TOKEN_PEPPER` and `OWNER_ENROLLMENT_TOKEN_PEPPER`.
+Set `ORGANIZATION_PORTAL_BASE_DOMAIN` to the production tenant DNS base domain; production rejects
+`ORGANIZATION_PORTAL_ORIGIN` (the fixed-origin development setting). List approved exact portal
+origins in `CORS_ORIGINS`.
+Use HTTPS origins and independent secret material. Set `PLATFORM_AUTH_COOKIE_SECURE=true`,
+`OWNER_AUTH_COOKIE_SECURE=true`, `SWAGGER_ENABLED=false` and, while the current single-process
+throttle is used, `PLATFORM_AUTH_SINGLE_INSTANCE=true` with exactly one service instance. This
+acknowledgment is not distributed throttling or a production security sign-off. Configure trusted
+proxy settings only for verified infrastructure. Leave bootstrap, delivery and MFA management release
+flags disabled until their existing prerequisites have been approved. Feature-specific provider keys
+and the password corpus (`PASSWORD_BLOCKLIST_FILE`, `PASSWORD_BLOCKLIST_SHA256`) must be provisioned
+separately when those features are enabled; the artifact does not copy arbitrary operator files.
+
+Dependency inspection found Nest 11.2.7, Nest CLI 11.0.24 and TypeScript 5.9.3. The lockfile audit
+reported **3 high and 13 moderate** vulnerabilities. High findings include body-parser, multer and
+the affected Nest Express adapter chain. Moderate findings include js-yaml/Swagger, qs, fast-uri,
+glob/minimatch and TypeScript ESLint/CLI dependency chains. No security upgrades were applied without
+regression evidence; the audit's Nest CLI 12 suggestion is a major upgrade, not an automatic repair.
+Do not run `npm audit fix --force`. These advisories remain unresolved deployment risks requiring a
+separate compatible dependency update and full regression checks.
+
+Human verification after selecting Node 22 and preparing the reviewed sibling DB package:
+
+```bash
+node --version
+npm ci --include=dev
+npm ls prisma @prisma/client @nexcoderw/akiba-db
+npm run format
+npm run format:check
+npm run lint
+npm run typecheck
+npm test
+npm run build
+node --input-type=module -e "const db = await import('@nexcoderw/akiba-db'); if (![db.DatabaseModule, db.PrismaService, db.PrismaClient].every(value => typeof value === 'function')) process.exit(1);"
+npm audit
+```
+
+The build helper itself requires an operator-run build with the protected source token and reviewed
+revision to verify the complete staged artifact. Never paste those credentials into command output.
+Code inspection and read-only dependency audits are not a successful Render build. The production
+NO-GO gates later in this README remain in effect, including independent tenant isolation, migration
+verification and operational readiness. No production deployment or database operation is authorized
+by this build repair.
+
 ## HTTP contract
 
 Routes use `/api/v1`. `/api/v1/health/live` reports process liveness, not database readiness.
