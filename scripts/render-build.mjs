@@ -6,9 +6,10 @@ import {
 	mkdirSync,
 	readFileSync,
 	rmSync,
+	symlinkSync,
 	writeFileSync,
 } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const marker = 'akiba-render-build-v1\n';
@@ -119,6 +120,35 @@ function requirePrisma7(directory) {
 	return cli;
 }
 
+/** file: siblings resolve from their real directory, not the consumer's node_modules.
+ * Share the consumer's peer instances after its final production install.
+ * @param {string} api @param {string} database @returns {void}
+ */
+export function linkRuntimePeers(api, database) {
+	const peers = manifest(database).peerDependencies;
+	const dependencies = manifest(api).dependencies;
+	if (!record(peers) || !record(dependencies)) {
+		throw new RenderBuildError('Runtime dependency declarations are missing.');
+	}
+	for (const name of Object.keys(peers)) {
+		if (!/^(?:@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/u.test(name)) {
+			throw new RenderBuildError('Invalid database peer package name.');
+		}
+		const target = join(api, 'node_modules', name);
+		if (typeof dependencies[name] !== 'string' || !existsSync(join(target, 'package.json'))) {
+			throw new RenderBuildError(`API runtime dependency is missing for database peer: ${name}.`);
+		}
+		if (manifest(target).name !== name) {
+			throw new RenderBuildError('Runtime peer package identity does not match.');
+		}
+		const destination = join(database, 'node_modules', name);
+		mkdirSync(dirname(destination), { recursive: true });
+		// Only called on generated artifact directories, never the operator's installed packages.
+		rmSync(destination, { recursive: true, force: true });
+		symlinkSync(relative(dirname(destination), target), destination, 'dir');
+	}
+}
+
 /** @returns {void} */
 export function buildRenderArtifact() {
 	const [major, minor] = process.versions.node.split('.').map(Number);
@@ -203,6 +233,7 @@ export function buildRenderArtifact() {
 	run('npm', ['ci', '--include=dev'], api, env, 'install locked API build dependencies');
 	run('npm', ['run', 'build'], api, env, 'compile API');
 	run('npm', ['ci', '--omit=dev'], api, env, 'install locked API runtime dependencies');
+	linkRuntimePeers(api, database);
 	run(
 		process.execPath,
 		[
