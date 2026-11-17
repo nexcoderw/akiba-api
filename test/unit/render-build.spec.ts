@@ -43,11 +43,15 @@ describe('Render build isolation', () => {
 			const target = join(root, 'target');
 			mkdirSync(target);
 			writeFileSync(join(target, 'keep'), 'preserved');
-			expect(() => prepareArtifact(target)).toThrow();
+			expect(() => {
+				prepareArtifact(target);
+			}).toThrow();
 			expect(readFileSync(join(target, 'keep'), 'utf8')).toBe('preserved');
 			prepareArtifact(join(root, 'owned'));
 			symlinkSync(join(root, 'owned'), join(root, 'link'));
-			expect(() => prepareArtifact(join(root, 'link'))).toThrow();
+			expect(() => {
+				prepareArtifact(join(root, 'link'));
+			}).toThrow();
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
