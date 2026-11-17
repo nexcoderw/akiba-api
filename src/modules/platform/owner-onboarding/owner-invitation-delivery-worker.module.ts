@@ -23,6 +23,7 @@ import { OwnerInvitationTokenService } from './owner-invitation-token.service.js
 			validate: validateOwnerInvitationWorkerEnvironment,
 		}),
 		DatabaseModule.forRootAsync({
+			imports: [ConfigModule],
 			inject: [ConfigService],
 			useFactory: (config: ConfigService<OwnerInvitationWorkerEnvironment, true>) => ({
 				databaseUrl: config.get('DATABASE_URL', { infer: true }),
