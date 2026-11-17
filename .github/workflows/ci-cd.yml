@@ -48,7 +48,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: api/.node-version
           cache: npm
           cache-dependency-path: |
             db/package-lock.json
@@ -92,3 +92,7 @@ jobs:
       - name: Build API
         working-directory: api
         run: npm run build
+
+      - name: Verify database package runtime exports without a connection
+        working-directory: api
+        run: node --input-type=module -e "const db = await import('@nexcoderw/akiba-db'); if (![db.DatabaseModule, db.PrismaService, db.PrismaClient].every(value => typeof value === 'function')) process.exit(1);"
