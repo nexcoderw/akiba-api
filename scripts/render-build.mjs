@@ -39,16 +39,23 @@ export function reviewedRevision(value) {
 }
 
 /** Build dependencies never receive application credentials or the source-read token.
- * @param {NodeJS.ProcessEnv} source @returns {NodeJS.ProcessEnv}
+ * @param {NodeJS.ProcessEnv} source @param {string} configurationDirectory
+ * @returns {NodeJS.ProcessEnv}
  */
-export function buildEnvironment(source) {
+export function buildEnvironment(source, configurationDirectory) {
+	mkdirSync(configurationDirectory, { recursive: true });
+	const userConfig = join(configurationDirectory, 'user.npmrc');
+	const globalConfig = join(configurationDirectory, 'global.npmrc');
+	// npm rejects loading the same path at two configuration levels, including /dev/null.
+	writeFileSync(userConfig, '', { mode: 0o600 });
+	writeFileSync(globalConfig, '', { mode: 0o600 });
 	/** @type {NodeJS.ProcessEnv} */
 	const env = {
 		CI: 'true',
 		NODE_ENV: 'production',
 		PRISMA_SKIP_POSTINSTALL_GENERATE: 'true',
-		NPM_CONFIG_USERCONFIG: '/dev/null',
-		NPM_CONFIG_GLOBALCONFIG: '/dev/null',
+		NPM_CONFIG_USERCONFIG: userConfig,
+		NPM_CONFIG_GLOBALCONFIG: globalConfig,
 		NPM_CONFIG_REGISTRY: 'https://registry.npmjs.org',
 	};
 	for (const key of ['PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP']) {
@@ -127,8 +134,8 @@ export function buildRenderArtifact() {
 	const source = join(artifact, 'source-db');
 	const database = join(artifact, 'db');
 	const api = join(artifact, 'api');
-	const env = buildEnvironment(process.env);
 	prepareArtifact(artifact);
+	const env = buildEnvironment(process.env, join(artifact, 'npm-config'));
 	mkdirSync(source);
 	const gitEnv = {
 		...env,
