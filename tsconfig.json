@@ -1,5 +1,6 @@
 {
 	"compilerOptions": {
+		"allowJs": true,
 		"module": "NodeNext",
 		"moduleResolution": "NodeNext",
 		"target": "ES2023",
@@ -21,6 +22,6 @@
 		"strict": true,
 		"useDefineForClassFields": false
 	},
-	"include": ["src/**/*.ts", "test/**/*.ts"],
-	"exclude": ["node_modules", "dist"]
+	"include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.mjs"],
+	"exclude": ["node_modules", "dist", ".render"]
 }
