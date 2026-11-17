@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
 	buildEnvironment,
+	linkRuntimePeers,
 	prepareArtifact,
 	reviewedRevision,
 } from '../../scripts/render-build.mjs';
@@ -63,6 +64,66 @@ describe('Render build isolation', () => {
 		expect(result.stderr).not.toContain('double-loading');
 		expect(result.status).toBe(0);
 		expect(result.stdout.trim()).toBe('https://registry.npmjs.org');
+	});
+	it('resolves database peers to the same API runtime instance without development dependencies', () => {
+		const api = join(configurationDirectory, 'api');
+		const database = join(configurationDirectory, 'db');
+		const peer = join(api, 'node_modules/@nestjs/common');
+		mkdirSync(peer, { recursive: true });
+		mkdirSync(join(database, 'dist'), { recursive: true });
+		writeFileSync(
+			join(api, 'package.json'),
+			JSON.stringify({
+				type: 'module',
+				dependencies: { '@nestjs/common': '^11.0.0' },
+			}),
+		);
+		writeFileSync(
+			join(database, 'package.json'),
+			JSON.stringify({
+				type: 'module',
+				peerDependencies: { '@nestjs/common': '^11.0.0' },
+			}),
+		);
+		writeFileSync(
+			join(peer, 'package.json'),
+			JSON.stringify({
+				name: '@nestjs/common',
+				type: 'module',
+				exports: './index.js',
+			}),
+		);
+		writeFileSync(join(peer, 'index.js'), 'export default {};');
+		writeFileSync(join(database, 'dist/index.js'), "export { default } from '@nestjs/common';");
+		const args = [
+			'--input-type=module',
+			'-e',
+			"import a from '@nestjs/common'; import b from '../db/dist/index.js'; if (a !== b) process.exit(1);",
+		];
+		expect(spawnSync(process.execPath, args, { cwd: api }).status).not.toBe(0);
+		linkRuntimePeers(api, database);
+		const result = spawnSync(process.execPath, args, { cwd: api, encoding: 'utf8' });
+		expect(result.stderr).toBe('');
+		expect(result.status).toBe(0);
+		// Linking again must safely replace existing links.
+		linkRuntimePeers(api, database);
+		expect(spawnSync(process.execPath, args, { cwd: api }).status).toBe(0);
+	});
+	it('rejects database peers absent from API runtime dependencies', () => {
+		const api = join(configurationDirectory, 'api');
+		const database = join(configurationDirectory, 'db');
+		mkdirSync(api);
+		mkdirSync(database);
+		writeFileSync(join(api, 'package.json'), JSON.stringify({ dependencies: {} }));
+		writeFileSync(
+			join(database, 'package.json'),
+			JSON.stringify({
+				peerDependencies: { '@nestjs/common': '^11.0.0' },
+			}),
+		);
+		expect(() => {
+			linkRuntimePeers(api, database);
+		}).toThrow('API runtime dependency is missing');
 	});
 	it('preserves unrecognized directories and rejects symlink targets', () => {
 		const root = mkdtempSync(join(tmpdir(), 'akiba-render-'));
