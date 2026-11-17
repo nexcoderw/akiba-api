@@ -1,5 +1,5 @@
 import { Global, Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DatabaseModule } from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from '../../config/environment.types.js';
@@ -9,6 +9,7 @@ import type { EnvironmentVariables } from '../../config/environment.types.js';
 @Module({
 	imports: [
 		DatabaseModule.forRootAsync({
+			imports: [ConfigModule],
 			inject: [ConfigService],
 			useFactory: (config: ConfigService<EnvironmentVariables, true>) => {
 				const databaseUrl = config.get('DATABASE_URL', { infer: true });
