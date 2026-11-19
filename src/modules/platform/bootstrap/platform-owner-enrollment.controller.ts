@@ -113,11 +113,7 @@ export class PlatformOwnerEnrollmentController {
 		@Body() input: PlatformOwnerPasswordDto,
 		@Req() request: PlatformRequest,
 	): Promise<PlatformOwnerStateDto> {
-		return this.enrollment.password(
-			this.proof(request),
-			input.password,
-			request.requestId,
-		);
+		return this.enrollment.password(this.proof(request), input.password, request.requestId);
 	}
 
 	@Post('setup')
