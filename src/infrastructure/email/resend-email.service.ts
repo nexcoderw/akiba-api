@@ -8,6 +8,17 @@ import type { EnvironmentVariables } from '../../config/environment.types.js';
 export class ResendEmailService {
 	constructor(private readonly config: ConfigService<EnvironmentVariables, true>) {}
 
+	/** Setup proof stays out of links, provider tags and diagnostics. */
+	async sendOwnerEnrollment(recipient: string, token: string, deliveryId: string): Promise<void> {
+		const origin = this.config.get('PLATFORM_ADMIN_ORIGIN', { infer: true });
+		await this.send(
+			recipient,
+			'Set up your Akiba platform owner account',
+			`Your operator authorized first-owner setup. Open ${origin}/enroll/platform-owner and enter this single-use setup code: ${token}\n\nIt expires in 15 minutes. Create your password and confirm an authenticator to complete setup. Do not share this code. If you did not expect this message, contact your operator.`,
+			`platform-owner-enrollment/${deliveryId}`,
+		);
+	}
+
 	async sendOtp(recipient: string, code: string, deliveryId: string): Promise<void> {
 		await this.send(
 			recipient,
