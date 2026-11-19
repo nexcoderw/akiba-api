@@ -38,10 +38,17 @@ describe('ResendEmailService', () => {
 		const token = 'a'.repeat(43);
 		await service.sendOwnerEnrollment('owner@example.com', token, 'reviewed-delivery');
 		const options = fetchMock.mock.calls[0]?.[1];
-		expect(options).toMatchObject({ headers: { 'Idempotency-Key': 'platform-owner-enrollment/reviewed-delivery' } });
+		expect(options).toMatchObject({
+			headers: { 'Idempotency-Key': 'platform-owner-enrollment/reviewed-delivery' },
+		});
 		const body: unknown = typeof options?.body === 'string' ? JSON.parse(options.body) : null;
 		expect(body).toMatchObject({ to: ['owner@example.com'] });
-		if (typeof body !== 'object' || body === null || !('text' in body) || typeof body.text !== 'string')
+		if (
+			typeof body !== 'object' ||
+			body === null ||
+			!('text' in body) ||
+			typeof body.text !== 'string'
+		)
 			throw new Error('Missing enrollment email text.');
 		expect(body.text).toContain(`setup code: ${token}`);
 		expect(body.text).toContain('http://localhost:4000/enroll/platform-owner');
