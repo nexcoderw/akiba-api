@@ -39,6 +39,8 @@ import { PlatformMfaManagementService } from '../mfa/platform-mfa-management.ser
 	],
 	// Nest instantiates controller guards in the consuming feature's module context.
 	exports: [
+		PlatformTotpService,
+		ResendEmailService,
 		PlatformCookieService,
 		PlatformPermissionGuard,
 		PlatformSessionGuard,
