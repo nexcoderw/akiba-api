@@ -6,6 +6,7 @@ import { NestFactory } from '@nestjs/core';
 
 import { PlatformBootstrapCliModule } from '../modules/platform/bootstrap/platform-bootstrap-cli.module.js';
 import { PlatformOwnerBootstrapService } from '../modules/platform/bootstrap/platform-owner-bootstrap.service.js';
+import { PlatformOwnerEnrollmentService } from '../modules/platform/bootstrap/platform-owner-enrollment.service.js';
 import {
 	PlatformBootstrapError,
 	type PlatformBootstrapStage,
@@ -51,7 +52,16 @@ async function run(): Promise<void> {
 			);
 		}
 		await confirmTarget(prompts.question.bind(prompts), target);
-		await initialize(prompts.question.bind(prompts), bootstrap, selectedEnvironment);
+		if (stage === 'send-enrollment') {
+			const phrase = `SEND ${selectedEnvironment} FIRST OWNER ENROLLMENT`;
+			if (await prompts.question(`Type "${phrase}" to send the setup email: `) !== phrase) {
+				throw new PlatformBootstrapError('BOOTSTRAP_INVALID_INPUT', 'Enrollment delivery was not authorized.');
+			}
+			await application.get(PlatformOwnerEnrollmentService).send();
+			writeLine('The email provider accepted the setup message. This does not confirm mailbox delivery.');
+		} else {
+			await initialize(prompts.question.bind(prompts), bootstrap, selectedEnvironment);
+		}
 	} finally {
 		prompts.close();
 		await application.close();
@@ -104,14 +114,14 @@ async function initialize(
 	await bootstrap.initialize({ email, displayName });
 	writeLine('The first owner is reserved and remains pending.');
 	writeLine('No password or MFA factor was enrolled.');
-	writeLine('Activation requires a protected mailbox challenge and enrollment flow.');
+	writeLine('Next, explicitly run the send-enrollment stage, then complete the emailed setup flow.');
 }
 
 function parseStage(value: string | undefined): PlatformBootstrapStage {
-	if (value === 'initialize' || value === 'activate') return value;
+	if (value === 'initialize' || value === 'activate' || value === 'send-enrollment') return value;
 	throw new PlatformBootstrapError(
 		'BOOTSTRAP_INVALID_INPUT',
-		'Choose exactly one bootstrap stage: initialize or activate.',
+		'Choose initialize or send-enrollment. Legacy activate remains disabled.',
 	);
 }
 
