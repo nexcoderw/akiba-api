@@ -1,4 +1,4 @@
-export type PlatformBootstrapStage = 'initialize' | 'activate';
+export type PlatformBootstrapStage = 'initialize' | 'activate' | 'send-enrollment';
 
 export type PlatformBootstrapErrorCode =
 	| 'BOOTSTRAP_DISABLED'

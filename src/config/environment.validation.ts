@@ -446,7 +446,13 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
 			))
 	)
 		throw new Error('MFA management requires explicit independent authentication and TOTP keys.');
-	const resendRequired = emailOtpEnabled || invitationDelivery !== null || mfaManagementEnabled;
+	// Reservation needs no sender. Explicit enrollment delivery requires a configured pair.
+	const resendRequired =
+		emailOtpEnabled ||
+		invitationDelivery !== null ||
+		mfaManagementEnabled ||
+		(bootstrapEnabled &&
+			(input.RESEND_API_KEY !== undefined || input.RESEND_FROM_EMAIL !== undefined));
 	const resendApiKey = resendRequired
 		? requireString(input.RESEND_API_KEY, 'RESEND_API_KEY')
 		: null;

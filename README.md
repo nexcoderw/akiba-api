@@ -22,14 +22,13 @@ live database identity check, and a transaction lock. It reserves one pending gl
 platform staff record with the protected owner role, with no password, verified email, MFA factor,
 or session. A pending or disabled staff record still blocks another initialization. Never run this
 command against a live branch without an approved owner and reviewed recovery plan: reservation is
-one-time and currently cannot be completed. Compare the displayed host against the separately
+one-time. Complete the protected email/password/authenticator flow below. Compare the displayed host against the separately
 approved Neon branch registry before confirming; the SQL check verifies the connected database and
 role, but it cannot independently prove Neon branch ownership.
 
 The old activation path trusted an operator-typed mailbox assertion. It is now closed. The
-`bootstrap:platform-owner:activate` command fails with `BOOTSTRAP_ENROLLMENT_UNAVAILABLE` until
-mailbox-proof delivery and consumption, proof-bound password setup, verified MFA enrollment,
-bounded attempts and transactional activation are implemented and tested. Do not mark the pending
+`bootstrap:platform-owner:activate` command remains disabled with `BOOTSTRAP_ENROLLMENT_UNAVAILABLE`;
+use the mailbox-proof flow below instead of operator assertions. Do not mark the pending
 identity active or set `email_verified_at` manually. Future loss of owner access requires a
 separately authorized governance/recovery procedure; it must not reopen initialization. The
 database-managed owner connection and absent RLS policies remain a separate production isolation
@@ -38,6 +37,64 @@ Any pending owner reserved by the older command may already have a password and 
 factor; leave it pending for a separately reviewed enrollment repair. Any owner previously
 activated through the old mailbox assertion needs a separate security review; this change does
 not retroactively prove mailbox ownership or revoke an existing session.
+
+### First-owner enrollment
+
+This implementation is a draft until human checks, reviewed migration deployment, real development
+email delivery and browser verification pass. It does not repair an already active owner. Database
+cleanup is separate; no reset, deletion, bootstrap bypass or automatic migration is added.
+
+Review/apply the additive draft migration `20261119080000_platform_owner_enrollment` through the
+canonical DB repository's guarded development workflow. Generate/build that package before API
+checks, and pin its reviewed source commit in `AKIBA_DB_SOURCE_REVISION` for CI/deployment. The SQL
+is authored, not generated from a live diff; review status/drift and SQL before applying it.
+
+Set `PLATFORM_OWNER_BOOTSTRAP_ENABLED=true` only for an operator-authorized setup window. Configure
+independent token/TOTP keys, the current dummy Argon2id hash, exact admin Origin and a verified Resend
+sender/API key. Bootstrap reads explicitly configured Resend credentials independently of the email-OTP
+and MFA-management flags; neither flag needs enabling for enrollment. Keep keys stable after setup.
+The operator must verify sender/domain ownership; a configured address alone is not proof.
+
+From `api/api`, after building and approving the selected development target:
+
+```sh
+NODE_ENV=development npm run bootstrap:platform-owner:init -- development
+NODE_ENV=development npm run bootstrap:platform-owner:send-enrollment -- development
+```
+
+Each command requires an interactive terminal and exact target confirmation. The second sends only
+to the sole pending system owner's stored email, never a caller-supplied recipient. It allows at most
+three explicit sends, at least 60 seconds apart; a new send invalidates all prior setup state. A failed
+or uncertain provider submission is not automatically retried and cannot be exchanged until the API
+records provider acceptance. Acceptance does not prove delivery. After the cap, stop for operator
+review; do not manually clear counters or revive legacy activation.
+
+The email contains the fixed `/enroll/platform-owner` page link and a separate one-use 256-bit code,
+never a proof in a URL. On that existing admin screen, exchange the code, create a 15-character-minimum
+password under the canonical NFC/blocklist/Argon2id policy, explicitly generate the authenticator key,
+and confirm its current six-digit TOTP. Setup expires 15 minutes after email issuance, permits at most
+three key generations and five total TOTP failures. New keys supersede earlier versions without
+resetting the attempt counter. Cancellation/expiry requires a new operator-issued email.
+
+Six fixed POST endpoints under `/api/v1/platform/bootstrap/enrollment` are `exchange`, `status`,
+`password`, `setup`, `complete` and `cancel`. All enforce exact admin Origin and bounded throttling;
+all except exchange require an origin-sealed HttpOnly challenge cookie plus CSRF. These proofs are
+stored separately from login challenges and cannot authorize platform routes. Responses are no-store.
+Exchange/status/password return `{ stage, expiresAt }`; setup returns `{ secret, version }`; completion
+returns `{ recoveryCodes }` once and clears all platform cookies; cancellation returns 204 and clears
+cookies. Swagger source defines validation and failure contracts.
+
+Completion atomically creates credentials, verifies the bound mailbox, activates the sole pending
+system owner, records identity/MFA audits, and issues ten hashed recovery codes using the DB-triggered
+current generation. No admin session is issued. Save the codes, return to normal login, and wait for
+a new authenticator code: the setup time step has already been consumed. If completion times out,
+try normal sign-in rather than replaying activation. Lost recovery disclosure cannot be retrieved.
+Disable the bootstrap flag after successful setup. Never use this path to reset an active owner.
+
+The offline service and HTTP regression suites cover proof lifecycle, restrictions, actual TOTP,
+attempt bounds, Origin/CSRF, DTO rejection and cookie handling. They have not been executed by the
+agent and do not establish live constraints, serializable races, email delivery or production readiness.
+Historical release-gate assessments later in this README predate this draft and remain unverified.
 
 ## Human verification
 
@@ -359,9 +416,9 @@ file dependency remains supported; no package version or lockfile was fabricated
 
 ## Platform authentication
 
-The initial owner remains pending because Step 6 has no approved mailbox-proof and credential/MFA
-enrollment flow. These endpoints serve already active, independently verified and enrolled platform
-staff; they cannot activate a pending owner. Step 8 management below preserves this bootstrap gate.
+The separate first-owner enrollment flow above activates only an operator-reserved pending owner.
+Ordinary authentication endpoints serve active, verified and enrolled platform staff; they cannot
+activate a pending owner. Step 8 management preserves this separation.
 No public platform registration or password reset is added.
 
 Deploy the reviewed DB migration `20261111180000_platform_authentication_audit` before these API

@@ -33,6 +33,29 @@ describe('ResendEmailService', () => {
 			headers: { 'Idempotency-Key': 'platform-otp/fictional-delivery-id' },
 		});
 	});
+	it('keeps the owner setup proof out of the URL and provider idempotency key', async () => {
+		fetchMock.mockResolvedValueOnce(Response.json({ id: '2f5298af-cf42-4e66-8968-a42be74cb34b' }));
+		const token = 'a'.repeat(43);
+		await service.sendOwnerEnrollment('owner@example.com', token, 'reviewed-delivery');
+		const options = fetchMock.mock.calls[0]?.[1];
+		expect(options).toMatchObject({
+			headers: { 'Idempotency-Key': 'platform-owner-enrollment/reviewed-delivery' },
+		});
+		const body: unknown = typeof options?.body === 'string' ? JSON.parse(options.body) : null;
+		expect(body).toMatchObject({ to: ['owner@example.com'] });
+		if (
+			typeof body !== 'object' ||
+			body === null ||
+			!('text' in body) ||
+			typeof body.text !== 'string'
+		)
+			throw new Error('Missing enrollment email text.');
+		expect(body.text).toContain(`setup code: ${token}`);
+		expect(body.text).toContain('http://localhost:4000/enroll/platform-owner');
+		expect(body.text).not.toContain(`?token=${token}`);
+		expect(body.text).not.toContain(`#${token}`);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
 	it('uses only approved security templates and never interpolates authenticator material', async () => {
 		fetchMock.mockResolvedValueOnce(Response.json({ id: '2f5298af-cf42-4e66-8968-a42be74cb34b' }));
 		await service.sendSecurityNotification(
