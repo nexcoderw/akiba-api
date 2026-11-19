@@ -54,11 +54,16 @@ async function run(): Promise<void> {
 		await confirmTarget(prompts.question.bind(prompts), target);
 		if (stage === 'send-enrollment') {
 			const phrase = `SEND ${selectedEnvironment} FIRST OWNER ENROLLMENT`;
-			if (await prompts.question(`Type "${phrase}" to send the setup email: `) !== phrase) {
-				throw new PlatformBootstrapError('BOOTSTRAP_INVALID_INPUT', 'Enrollment delivery was not authorized.');
+			if ((await prompts.question(`Type "${phrase}" to send the setup email: `)) !== phrase) {
+				throw new PlatformBootstrapError(
+					'BOOTSTRAP_INVALID_INPUT',
+					'Enrollment delivery was not authorized.',
+				);
 			}
 			await application.get(PlatformOwnerEnrollmentService).send();
-			writeLine('The email provider accepted the setup message. This does not confirm mailbox delivery.');
+			writeLine(
+				'The email provider accepted the setup message. This does not confirm mailbox delivery.',
+			);
 		} else {
 			await initialize(prompts.question.bind(prompts), bootstrap, selectedEnvironment);
 		}
@@ -114,7 +119,9 @@ async function initialize(
 	await bootstrap.initialize({ email, displayName });
 	writeLine('The first owner is reserved and remains pending.');
 	writeLine('No password or MFA factor was enrolled.');
-	writeLine('Next, explicitly run the send-enrollment stage, then complete the emailed setup flow.');
+	writeLine(
+		'Next, explicitly run the send-enrollment stage, then complete the emailed setup flow.',
+	);
 }
 
 function parseStage(value: string | undefined): PlatformBootstrapStage {
