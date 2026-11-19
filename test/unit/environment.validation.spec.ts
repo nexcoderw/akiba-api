@@ -1,6 +1,20 @@
 import { validateEnvironment } from '../../src/config/environment.validation.js';
 
 describe('validateEnvironment', () => {
+	it('loads a bootstrap sender without enabling email OTP or MFA management', () => {
+		const input = {
+			NODE_ENV: 'development',
+			DATABASE_URL: 'postgresql://neondb_owner:fictional@development.example.com/neondb?sslmode=require',
+			PLATFORM_OWNER_BOOTSTRAP_ENABLED: 'true',
+			RESEND_API_KEY: 're_fictional',
+			RESEND_FROM_EMAIL: 'security@example.com',
+		};
+		expect(validateEnvironment(input)).toMatchObject({
+			RESEND_API_KEY: 're_fictional', RESEND_FROM_EMAIL: 'security@example.com',
+			PLATFORM_AUTH_EMAIL_OTP_ENABLED: false, PLATFORM_MFA_MANAGEMENT_ENABLED: false,
+		});
+		expect(() => validateEnvironment({ ...input, RESEND_FROM_EMAIL: undefined })).toThrow('RESEND_FROM_EMAIL');
+	});
 	it('requires a complete, bounded offline password blocklist configuration', () => {
 		expect(() =>
 			validateEnvironment({ NODE_ENV: 'test', PASSWORD_BLOCKLIST_FILE: '/tmp/corpus.sha256' }),
