@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PlatformStaffStatus, Prisma, PrismaService, UserStatus, type PlatformOwnerEnrollment } from '@nexcoderw/akiba-db';
+import {
+	PlatformStaffStatus,
+	Prisma,
+	PrismaService,
+	UserStatus,
+	type PlatformOwnerEnrollment,
+} from '@nexcoderw/akiba-db';
 
 import { ApiProblemException } from '../../../common/errors/api-problem.exception.js';
 import { acceptsPasswordCreation } from '../../../common/identity/password-policy.js';
@@ -35,8 +41,10 @@ export class PlatformOwnerEnrollmentService {
 
 	/** Operator-only explicit delivery. An uncertain provider response is never retried automatically. */
 	async send(): Promise<void> {
-		if (this.config.get('RESEND_API_KEY', { infer: true }) === null ||
-			this.config.get('RESEND_FROM_EMAIL', { infer: true }) === null) {
+		if (
+			this.config.get('RESEND_API_KEY', { infer: true }) === null ||
+			this.config.get('RESEND_FROM_EMAIL', { infer: true }) === null
+		) {
 			throw new ApiProblemException('PLATFORM_EMAIL_UNAVAILABLE');
 		}
 		const token = this.tokens.createToken();
@@ -45,8 +53,10 @@ export class PlatformOwnerEnrollmentService {
 			const previous = await tx.platformOwnerEnrollment.findUnique({
 				where: { platformStaffId: staff.id },
 			});
-			if (previous !== null && (previous.sendCount >= MAX_SENDS ||
-				now.getTime() - previous.createdAt.getTime() < 60_000)) {
+			if (
+				previous !== null &&
+				(previous.sendCount >= MAX_SENDS || now.getTime() - previous.createdAt.getTime() < 60_000)
+			) {
 				throw new ApiProblemException('RATE_LIMITED');
 			}
 			const data = {
@@ -55,24 +65,39 @@ export class PlatformOwnerEnrollmentService {
 				tokenDigest: this.digest('mailbox', token),
 				createdAt: now,
 				expiresAt: new Date(now.getTime() + LIFETIME_MS),
-				sentAt: null, exchangedAt: null, consumedAt: null, sessionDigest: null,
+				sentAt: null,
+				exchangedAt: null,
+				consumedAt: null,
+				sessionDigest: null,
 				sendCount: (previous?.sendCount ?? 0) + 1,
-				failedAttempts: 0, setupVersion: 0, passwordHash: null,
-				encryptedSecret: null, encryptionKeyId: null, encryptionVersion: null,
-				initializationVector: null, authenticationTag: null,
+				failedAttempts: 0,
+				setupVersion: 0,
+				passwordHash: null,
+				encryptedSecret: null,
+				encryptionKeyId: null,
+				encryptionVersion: null,
+				initializationVector: null,
+				authenticationTag: null,
 			};
 			const row = await tx.platformOwnerEnrollment.upsert({
 				where: { platformStaffId: staff.id },
-				create: { platformStaffId: staff.id, ...data }, update: data,
+				create: { platformStaffId: staff.id, ...data },
+				update: data,
 			});
 			return { id: row.id, email: row.email, tokenDigest: row.tokenDigest };
 		});
-		await this.email.sendOwnerEnrollment(delivery.email, token, `${delivery.id}/${delivery.tokenDigest}`);
+		await this.email.sendOwnerEnrollment(
+			delivery.email,
+			token,
+			`${delivery.id}/${delivery.tokenDigest}`,
+		);
 		// Delivery acknowledgement is conditional: an older send cannot activate a newer proof.
-		const sent = await this.transaction((tx, now) => tx.platformOwnerEnrollment.updateMany({
-			where: { id: delivery.id, tokenDigest: delivery.tokenDigest, consumedAt: null },
-			data: { sentAt: now },
-		}));
+		const sent = await this.transaction((tx, now) =>
+			tx.platformOwnerEnrollment.updateMany({
+				where: { id: delivery.id, tokenDigest: delivery.tokenDigest, consumedAt: null },
+				data: { sentAt: now },
+			}),
+		);
 		if (sent.count !== 1) throw new ApiProblemException('AUTH_MFA_INVALID');
 	}
 
@@ -84,38 +109,56 @@ export class PlatformOwnerEnrollmentService {
 			const row = await tx.platformOwnerEnrollment.findUnique({
 				where: { tokenDigest: this.digest('mailbox', token) },
 			});
-			if (row === null || row.platformStaffId !== staff.id || row.sentAt === null ||
-				row.exchangedAt !== null || !this.usable(row, staff.user, now)) throw invalid();
+			if (
+				row?.platformStaffId !== staff.id ||
+				row.sentAt === null ||
+				row.exchangedAt !== null ||
+				!this.usable(row, staff.user, now)
+			)
+				throw invalid();
 			const expiresAt = new Date(Math.min(row.expiresAt.getTime(), now.getTime() + LIFETIME_MS));
 			await tx.platformOwnerEnrollment.update({
 				where: { id: row.id },
 				data: { sessionDigest: this.digest('session', sessionToken), exchangedAt: now, expiresAt },
 			});
-			return { stage: 'password' as const, expiresAt: expiresAt.toISOString(), token: sessionToken };
+			return {
+				stage: 'password' as const,
+				expiresAt: expiresAt.toISOString(),
+				token: sessionToken,
+			};
 		});
 	}
 
 	async status(token: string): Promise<{ stage: 'password' | 'mfa'; expiresAt: string }> {
-		return this.withProof(token, async (_tx, row) => ({
+		return this.withProof(token, (_tx, row) => ({
 			stage: row.passwordHash === null ? ('password' as const) : ('mfa' as const),
 			expiresAt: row.expiresAt.toISOString(),
 		}));
 	}
 
-	async password(token: string, value: string, requestId: string): Promise<{ stage: 'mfa'; expiresAt: string }> {
+	async password(
+		token: string,
+		value: string,
+		requestId: string,
+	): Promise<{ stage: 'mfa'; expiresAt: string }> {
 		// Prove eligibility before spending bounded Argon2 work; recheck under lock after hashing.
 		const progress = await this.status(token);
 		if (progress.stage !== 'password') throw new ApiProblemException('RESOURCE_CONFLICT');
 		const buffer = Buffer.from(value, 'utf8');
 		let passwordHash: string;
-		try { passwordHash = await this.passwords.hash(buffer); }
-		finally { buffer.fill(0); }
+		try {
+			passwordHash = await this.passwords.hash(buffer);
+		} finally {
+			buffer.fill(0);
+		}
 		return this.withProof(token, async (tx, row, staff) => {
 			const candidate = Buffer.from(value, 'utf8');
 			try {
 				if (!acceptsPasswordCreation(candidate, staff.user.email))
 					throw new ApiProblemException('PASSWORD_POLICY_VIOLATION');
-			} finally { candidate.fill(0); }
+			} finally {
+				candidate.fill(0);
+			}
 			if (row.passwordHash !== null) throw new ApiProblemException('RESOURCE_CONFLICT');
 			await tx.platformOwnerEnrollment.update({ where: { id: row.id }, data: { passwordHash } });
 			await recordPlatformAuthentication(tx, staff.user, 'mfa_enrollment_started', requestId);
@@ -143,55 +186,112 @@ export class PlatformOwnerEnrollmentService {
 		});
 	}
 
-	async complete(token: string, code: string, version: number, requestId: string): Promise<{ recoveryCodes: string[] }> {
+	async complete(
+		token: string,
+		code: string,
+		version: number,
+		requestId: string,
+	): Promise<{ recoveryCodes: string[] }> {
 		const result = await this.withProof(token, async (tx, row, staff, now) => {
-			if (row.passwordHash === null || row.encryptedSecret === null ||
-				row.initializationVector === null || row.authenticationTag === null ||
-				row.encryptionKeyId === null || row.encryptionVersion === null ||
-				row.setupVersion !== version) throw invalid();
-			const step = /^\d{6}$/u.test(code) ? this.totp.verify({
-				platformStaffId: staff.id, encryptedSecret: row.encryptedSecret,
-				initializationVector: row.initializationVector, authenticationTag: row.authenticationTag,
-				encryptionKeyId: row.encryptionKeyId, encryptionVersion: row.encryptionVersion,
-			}, code, now) : null;
+			if (
+				row.passwordHash === null ||
+				row.encryptedSecret === null ||
+				row.initializationVector === null ||
+				row.authenticationTag === null ||
+				row.encryptionKeyId === null ||
+				row.encryptionVersion === null ||
+				row.setupVersion !== version
+			)
+				throw invalid();
+			const step = /^\d{6}$/u.test(code)
+				? this.totp.verify(
+						{
+							platformStaffId: staff.id,
+							encryptedSecret: row.encryptedSecret,
+							initializationVector: row.initializationVector,
+							authenticationTag: row.authenticationTag,
+							encryptionKeyId: row.encryptionKeyId,
+							encryptionVersion: row.encryptionVersion,
+						},
+						code,
+						now,
+					)
+				: null;
 			if (step === null) {
 				await tx.platformOwnerEnrollment.update({
-					where: { id: row.id }, data: { failedAttempts: { increment: 1 } },
+					where: { id: row.id },
+					data: { failedAttempts: { increment: 1 } },
 				});
 				await recordPlatformAuthentication(tx, staff.user, 'mfa_enrollment_failed', requestId);
 				return null; // Commit the attempt before returning a generic public rejection.
 			}
-			await tx.platformOwnerEnrollment.update({ where: { id: row.id }, data: {
-				consumedAt: now, passwordHash: null, setupVersion: 0,
-				encryptedSecret: null, encryptionKeyId: null, encryptionVersion: null,
-				initializationVector: null, authenticationTag: null,
-			} });
-			await tx.passwordCredential.create({ data: {
-				userId: staff.userId, passwordHash: row.passwordHash, normalization: 'nfc',
-			} });
-			await tx.platformTotpCredential.create({ data: {
-				platformStaffId: staff.id, encryptedSecret: row.encryptedSecret,
-				initializationVector: row.initializationVector, authenticationTag: row.authenticationTag,
-				encryptionKeyId: row.encryptionKeyId, encryptionVersion: row.encryptionVersion,
-				verifiedAt: now, lastUsedAt: now, lastAcceptedTimeStep: step.timeStep,
-			} });
+			await tx.platformOwnerEnrollment.update({
+				where: { id: row.id },
+				data: {
+					consumedAt: now,
+					passwordHash: null,
+					setupVersion: 0,
+					encryptedSecret: null,
+					encryptionKeyId: null,
+					encryptionVersion: null,
+					initializationVector: null,
+					authenticationTag: null,
+				},
+			});
+			await tx.passwordCredential.create({
+				data: {
+					userId: staff.userId,
+					passwordHash: row.passwordHash,
+					normalization: 'nfc',
+				},
+			});
+			await tx.platformTotpCredential.create({
+				data: {
+					platformStaffId: staff.id,
+					encryptedSecret: row.encryptedSecret,
+					initializationVector: row.initializationVector,
+					authenticationTag: row.authenticationTag,
+					encryptionKeyId: row.encryptionKeyId,
+					encryptionVersion: row.encryptionVersion,
+					verifiedAt: now,
+					lastUsedAt: now,
+					lastAcceptedTimeStep: step.timeStep,
+				},
+			});
 			// Inserting a verified factor advances recovery_generation via the canonical DB trigger.
 			const updated = await tx.platformStaff.update({
-				where: { id: staff.id }, data: { status: PlatformStaffStatus.ACTIVE },
+				where: { id: staff.id },
+				data: { status: PlatformStaffStatus.ACTIVE },
 			});
 			const user = await tx.user.update({
-				where: { id: staff.userId }, data: {
-					status: UserStatus.ACTIVE, emailVerifiedAt: now, identityVersion: { increment: 1 },
+				where: { id: staff.userId },
+				data: {
+					status: UserStatus.ACTIVE,
+					emailVerifiedAt: now,
+					identityVersion: { increment: 1 },
 				},
 			});
 			const recoveryCodes = this.tokens.createRecoveryCodes();
-			await tx.platformRecoveryCode.createMany({ data: recoveryCodes.map((code) => ({
-				platformStaffId: staff.id, generation: updated.recoveryGeneration,
-				digestVersion: 2, codeDigest: this.tokens.recoveryCodeDigest(code),
-			})) });
+			await tx.platformRecoveryCode.createMany({
+				data: recoveryCodes.map((code) => ({
+					platformStaffId: staff.id,
+					generation: updated.recoveryGeneration,
+					digestVersion: 2,
+					codeDigest: this.tokens.recoveryCodeDigest(code),
+				})),
+			});
 			const actor = { actorKind: 'bootstrap' as const, actorPlatformStaffId: staff.id, requestId };
-			await recordIdentityEvent(tx, actor, { userId: user.id, action: 'email_verified', identityVersion: user.identityVersion });
-			await recordIdentityEvent(tx, actor, { userId: user.id, action: 'password_created', identityVersion: user.identityVersion, credentialVersion: 1 });
+			await recordIdentityEvent(tx, actor, {
+				userId: user.id,
+				action: 'email_verified',
+				identityVersion: user.identityVersion,
+			});
+			await recordIdentityEvent(tx, actor, {
+				userId: user.id,
+				action: 'password_created',
+				identityVersion: user.identityVersion,
+				credentialVersion: 1,
+			});
 			await recordPlatformAuthentication(tx, user, 'mfa_factor_enrolled', requestId);
 			await recordPlatformAuthentication(tx, user, 'mfa_recovery_rotated', requestId);
 			return { recoveryCodes };
@@ -202,11 +302,19 @@ export class PlatformOwnerEnrollmentService {
 
 	async cancel(token: string): Promise<void> {
 		await this.withProof(token, async (tx, row, _staff, now) => {
-			await tx.platformOwnerEnrollment.update({ where: { id: row.id }, data: {
-				consumedAt: now, passwordHash: null, setupVersion: 0,
-				encryptedSecret: null, encryptionKeyId: null, encryptionVersion: null,
-				initializationVector: null, authenticationTag: null,
-			} });
+			await tx.platformOwnerEnrollment.update({
+				where: { id: row.id },
+				data: {
+					consumedAt: now,
+					passwordHash: null,
+					setupVersion: 0,
+					encryptedSecret: null,
+					encryptionKeyId: null,
+					encryptionVersion: null,
+					initializationVector: null,
+					authenticationTag: null,
+				},
+			});
 		});
 	}
 
@@ -215,54 +323,93 @@ export class PlatformOwnerEnrollmentService {
 	}
 
 	private usable(
-		row: { consumedAt: Date | null; expiresAt: Date; failedAttempts: number; email: string; identityVersion: number },
-		user: { email: string; identityVersion: number }, now: Date,
+		row: {
+			consumedAt: Date | null;
+			expiresAt: Date;
+			failedAttempts: number;
+			email: string;
+			identityVersion: number;
+		},
+		user: { email: string; identityVersion: number },
+		now: Date,
 	): boolean {
-		return row.consumedAt === null && row.expiresAt > now && row.failedAttempts < MAX_ATTEMPTS &&
-			row.email === user.email && row.identityVersion === user.identityVersion;
+		return (
+			row.consumedAt === null &&
+			row.expiresAt > now &&
+			row.failedAttempts < MAX_ATTEMPTS &&
+			row.email === user.email &&
+			row.identityVersion === user.identityVersion
+		);
 	}
 
 	private async pendingOwner(tx: Prisma.TransactionClient) {
-		if (await tx.platformStaff.count() !== 1) throw invalid();
-		const staff = await tx.platformStaff.findFirst({ include: {
-			user: { include: { passwordCredential: true } }, totpCredential: true,
-			roles: { include: { platformRole: true } },
-		} });
-		if (staff === null || staff.status !== PlatformStaffStatus.PENDING ||
-			staff.user.status !== UserStatus.PENDING || staff.user.emailVerifiedAt !== null ||
-			staff.user.passwordCredential !== null || staff.totpCredential !== null ||
-			staff.roles.length !== 1 || !staff.roles.some(({ platformRole }) =>
-				platformRole.key === 'platform.owner' && platformRole.isSystem)) throw invalid();
+		if ((await tx.platformStaff.count()) !== 1) throw invalid();
+		const staff = await tx.platformStaff.findFirst({
+			include: {
+				user: { include: { passwordCredential: true } },
+				totpCredential: true,
+				roles: { include: { platformRole: true } },
+			},
+		});
+		if (
+			staff?.status !== PlatformStaffStatus.PENDING ||
+			staff.user.status !== UserStatus.PENDING ||
+			staff.user.emailVerifiedAt !== null ||
+			staff.user.passwordCredential !== null ||
+			staff.totpCredential !== null ||
+			staff.roles.length !== 1 ||
+			!staff.roles.some(
+				({ platformRole }) => platformRole.key === 'platform.owner' && platformRole.isSystem,
+			)
+		)
+			throw invalid();
 		return staff;
 	}
 
-	private async withProof<T>(token: string, operation: (
-		tx: Prisma.TransactionClient,
-		row: PlatformOwnerEnrollment,
-		staff: Awaited<ReturnType<PlatformOwnerEnrollmentService['pendingOwner']>>, now: Date,
-	) => Promise<T>): Promise<T> {
+	private async withProof<T>(
+		token: string,
+		operation: (
+			tx: Prisma.TransactionClient,
+			row: PlatformOwnerEnrollment,
+			staff: Awaited<ReturnType<PlatformOwnerEnrollmentService['pendingOwner']>>,
+			now: Date,
+		) => T | Promise<T>,
+	): Promise<T> {
 		if (!/^[A-Za-z0-9_-]{43}$/u.test(token)) throw invalid();
 		return this.transaction(async (tx, now) => {
 			const staff = await this.pendingOwner(tx);
 			const row = await tx.platformOwnerEnrollment.findUnique({
 				where: { sessionDigest: this.digest('session', token) },
 			});
-			if (row === null || row.platformStaffId !== staff.id || row.exchangedAt === null ||
-				!this.usable(row, staff.user, now)) throw invalid();
+			if (
+				row?.platformStaffId !== staff.id ||
+				row.exchangedAt === null ||
+				!this.usable(row, staff.user, now)
+			)
+				throw invalid();
 			return operation(tx, row, staff, now);
 		});
 	}
 
-	private async transaction<T>(operation: (tx: Prisma.TransactionClient, now: Date) => Promise<T>): Promise<T> {
+	private async transaction<T>(
+		operation: (tx: Prisma.TransactionClient, now: Date) => Promise<T>,
+	): Promise<T> {
 		if (!this.config.get('PLATFORM_OWNER_BOOTSTRAP_ENABLED', { infer: true }))
 			throw new ApiProblemException('SERVICE_UNAVAILABLE');
 		try {
-			return await this.prisma.$transaction(async (tx) => {
-				await acquireBootstrapLock(tx);
-				const [clock] = await tx.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AS now`;
-				if (clock === undefined) throw invalid();
-				return operation(tx, clock.now);
-			}, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 10_000 });
+			return await this.prisma.$transaction(
+				async (tx) => {
+					await acquireBootstrapLock(tx);
+					const [clock] = await tx.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AS now`;
+					if (clock === undefined) throw invalid();
+					return operation(tx, clock.now);
+				},
+				{
+					isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+					maxWait: 5000,
+					timeout: 10_000,
+				},
+			);
 		} catch (error: unknown) {
 			if (error instanceof ApiProblemException) throw error;
 			throw new ApiProblemException('SERVICE_UNAVAILABLE', [], error);
