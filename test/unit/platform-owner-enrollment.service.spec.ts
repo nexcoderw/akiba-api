@@ -63,7 +63,7 @@ describe('first platform owner enrollment', () => {
 				PlatformTotpService,
 				{ provide: ConfigService, useValue: config },
 				{ provide: PlatformTokenService, useValue: tokens },
-				{ provide: PlatformPasswordService, useValue: { hash: hashPassword } },
+				{ provide: PlatformPasswordService, useValue: { hashForMfaEnrollment: hashPassword } },
 				{ provide: ResendEmailService, useValue: { sendOwnerEnrollment: sendEmail } },
 				{
 					provide: PrismaService,
@@ -159,7 +159,7 @@ describe('first platform owner enrollment', () => {
 
 	it('stages a password without activating credentials, and rejects a second password write', async () => {
 		await expect(
-			service.password(sessionToken, 'a unique fictional passphrase', requestId),
+			service.password(sessionToken, 'J7m!v4Qx', requestId),
 		).resolves.toMatchObject({ stage: 'mfa' });
 		expect(row.passwordHash).toBe('fictional-reviewed-hash');
 		expect(createPassword).not.toHaveBeenCalled();
