@@ -7,7 +7,11 @@ import { argon2id, hash as argonHash, verify as argonVerify } from 'argon2';
 import type { EnvironmentVariables } from '../../config/environment.types.js';
 import { ApiProblemException } from '../errors/api-problem.exception.js';
 import { PasswordBlocklist } from './password-blocklist.js';
-import { MAXIMUM_PASSWORD_BYTES, normalizeNewPassword } from './password-policy.js';
+import {
+	MAXIMUM_PASSWORD_BYTES,
+	MINIMUM_MFA_PASSWORD_CHARACTERS,
+	normalizeNewPassword,
+} from './password-policy.js';
 
 interface HashParameters {
 	readonly type: typeof argon2id;
@@ -73,7 +77,12 @@ export class PasswordHashingService {
 	}
 
 	async hash(password: Buffer): Promise<string> {
-		return this.createHash(password, CURRENT_PARAMETERS);
+		return this.createHash(password);
+	}
+
+	/** Use only when enrollment requires a second factor before account activation. */
+	async hashForMfaEnrollment(password: Buffer): Promise<string> {
+		return this.createHash(password, MINIMUM_MFA_PASSWORD_CHARACTERS);
 	}
 
 	/** Rehash a verified secret without applying creation policy or changing its representation. */
@@ -103,14 +112,14 @@ export class PasswordHashingService {
 		);
 	}
 
-	private async createHash(password: Buffer, policy: HashParameters): Promise<string> {
+	private async createHash(password: Buffer, minimumCharacters?: number): Promise<string> {
 		if (password.length > MAXIMUM_PASSWORD_BYTES || !isUtf8(password)) {
 			throw new ApiProblemException('PASSWORD_POLICY_VIOLATION');
 		}
-		const normalized = normalizeNewPassword(password.toString('utf8'));
+		const normalized = normalizeNewPassword(password.toString('utf8'), minimumCharacters);
 		if (normalized === null) throw new ApiProblemException('PASSWORD_POLICY_VIOLATION');
 		await this.blocklist.assertAcceptable(normalized);
-		return this.execute(() => argonHash(normalized, policy));
+		return this.execute(() => argonHash(normalized, CURRENT_PARAMETERS));
 	}
 
 	async verify(passwordHash: string, password: string, normalization = 'raw'): Promise<boolean> {
