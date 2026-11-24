@@ -12,6 +12,8 @@ import {
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { DatabaseRevisionError, readDatabaseRevision } from './db-revision.mjs';
+
 const marker = 'akiba-render-build-v1\n';
 
 class RenderBuildError extends Error {}
@@ -26,16 +28,6 @@ function manifest(directory) {
 	/** @type {unknown} */
 	const value = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'));
 	if (!record(value)) throw new RenderBuildError('Invalid package manifest.');
-	return value;
-}
-
-/** @param {unknown} value @returns {string} */
-export function reviewedRevision(value) {
-	if (typeof value !== 'string' || !/^[a-f0-9]{40}$/u.test(value)) {
-		throw new RenderBuildError(
-			'Set AKIBA_DB_SOURCE_REVISION to an operator-reviewed immutable database commit.',
-		);
-	}
 	return value;
 }
 
@@ -155,7 +147,7 @@ export function buildRenderArtifact() {
 	if (major !== 22 || minor === undefined || minor < 12) {
 		throw new RenderBuildError('Use Node >=22.12.0 <23; set Render NODE_VERSION=22.');
 	}
-	const revision = reviewedRevision(process.env.AKIBA_DB_SOURCE_REVISION);
+	const revision = readDatabaseRevision();
 	const token = process.env.DB_REPOSITORY_READ_TOKEN;
 	if (!token || /[\r\n]/u.test(token))
 		throw new RenderBuildError('Set the protected DB_REPOSITORY_READ_TOKEN build credential.');
@@ -262,9 +254,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 		buildRenderArtifact();
 	} catch (error) {
 		// Only intentional fixed diagnostics are safe to display; filesystem errors may contain paths.
-		process.stderr.write(
-			`${error instanceof RenderBuildError ? error.message : 'Render build failed; inspect the last completed build step.'}\n`,
-		);
+		const message =
+			error instanceof RenderBuildError || error instanceof DatabaseRevisionError
+				? error.message
+				: 'Render build failed. Inspect the last completed build step.';
+		process.stderr.write(`${message}\n`);
 		process.exitCode = 1;
 	}
 }
