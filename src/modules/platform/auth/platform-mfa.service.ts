@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { PlatformStaffStatus, Prisma, PrismaService } from '@nexcoderw/akiba-db';
 
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
+import type { PlatformMfaVerifiedResponseDto } from './dto/platform-auth-response.dto.js';
 import type { PlatformMfaVerifyDto } from './dto/platform-mfa-verify.dto.js';
 import { PLATFORM_AUTH_ERROR } from './platform-auth.constants.js';
 import { PlatformTokenService } from './platform-token.service.js';
@@ -29,7 +30,7 @@ export class PlatformMfaRejectedException extends UnauthorizedException {
 }
 
 export interface PlatformMfaSuccess {
-	readonly status: 'authenticated' | 'mfa_recovery_required';
+	readonly status: PlatformMfaVerifiedResponseDto['status'];
 	readonly expiresAt: string;
 	readonly sessionToken: string;
 	readonly expiresAtDate: Date;
@@ -54,6 +55,11 @@ class ConcurrentMfaConsumptionError extends Error {
 
 const MFA_TRANSACTION_MAX_WAIT_MS = 8_000;
 const MFA_TRANSACTION_TIMEOUT_MS = 10_000;
+const VERIFICATION_STATUS = {
+	totp: 'authenticated',
+	recovery_code: 'mfa_recovery_required',
+	email_otp: 'email_verified',
+} as const;
 
 @Injectable()
 export class PlatformMfaService {
@@ -324,7 +330,7 @@ export class PlatformMfaService {
 			}),
 		);
 		return {
-			status: input.method === 'totp' ? 'authenticated' : 'mfa_recovery_required',
+			status: VERIFICATION_STATUS[input.method],
 			expiresAt: outcome.expiresAt.toISOString(),
 			expiresAtDate: outcome.expiresAt,
 			sessionToken,
