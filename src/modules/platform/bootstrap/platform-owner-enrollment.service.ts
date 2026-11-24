@@ -9,7 +9,10 @@ import {
 } from '@nexcoderw/akiba-db';
 
 import { ApiProblemException } from '../../../common/errors/api-problem.exception.js';
-import { acceptsPasswordCreation } from '../../../common/identity/password-policy.js';
+import {
+	acceptsPasswordCreation,
+	MINIMUM_MFA_PASSWORD_CHARACTERS,
+} from '../../../common/identity/password-policy.js';
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
 import { ResendEmailService } from '../../../infrastructure/email/resend-email.service.js';
 import { recordIdentityEvent } from '../../identity/identity-security.js';
@@ -147,14 +150,14 @@ export class PlatformOwnerEnrollmentService {
 		const buffer = Buffer.from(value, 'utf8');
 		let passwordHash: string;
 		try {
-			passwordHash = await this.passwords.hash(buffer);
+			passwordHash = await this.passwords.hashForMfaEnrollment(buffer);
 		} finally {
 			buffer.fill(0);
 		}
 		return this.withProof(token, async (tx, row, staff) => {
 			const candidate = Buffer.from(value, 'utf8');
 			try {
-				if (!acceptsPasswordCreation(candidate, staff.user.email))
+				if (!acceptsPasswordCreation(candidate, staff.user.email, MINIMUM_MFA_PASSWORD_CHARACTERS))
 					throw new ApiProblemException('PASSWORD_POLICY_VIOLATION');
 			} finally {
 				candidate.fill(0);
