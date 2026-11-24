@@ -46,7 +46,7 @@ cleanup is separate; no reset, deletion, bootstrap bypass or automatic migration
 
 Review/apply the additive draft migration `20261119080000_platform_owner_enrollment` through the
 canonical DB repository's guarded development workflow. Generate/build that package before API
-checks, and pin its reviewed source commit in `AKIBA_DB_SOURCE_REVISION` for CI/deployment. The SQL
+checks, and pin its reviewed source commit in `akiba-db-revision.txt` for CI and deployment. The SQL
 is authored, not generated from a live diff; review status/drift and SQL before applying it.
 
 Set `PLATFORM_OWNER_BOOTSTRAP_ENABLED=true` only for an operator-authorized setup window. Configure
@@ -133,20 +133,20 @@ so the deployment helper stages both packages inside `.render`, preserving their
 
 Configure a native Node Render service using the API repository with its Root Directory blank:
 
-| Setting                  | Value                                                                   |
-| ------------------------ | ----------------------------------------------------------------------- |
-| Build Command            | `node scripts/render-build.mjs`                                         |
-| Start Command            | `npm --prefix .render/api run start:prod`                               |
-| NODE_VERSION             | `22`                                                                    |
-| NODE_ENV                 | `production`                                                            |
-| HOST                     | `0.0.0.0`                                                               |
-| PORT                     | Render-provided port; do not hardcode it                                |
-| AKIBA_DB_SOURCE_REVISION | Reviewed 40-character DB commit, matching API CI compatibility evidence |
-| DB_REPOSITORY_READ_TOKEN | Protected GitHub credential with read-only contents access to akiba-db  |
+| Setting                  | Value                                                                  |
+| ------------------------ | ---------------------------------------------------------------------- |
+| Build Command            | `node scripts/render-build.mjs`                                        |
+| Start Command            | `npm --prefix .render/api run start:prod`                              |
+| NODE_VERSION             | `22`                                                                   |
+| NODE_ENV                 | `production`                                                           |
+| HOST                     | `0.0.0.0`                                                              |
+| PORT                     | Render-provided port; do not hardcode it                               |
+| DB_REPOSITORY_READ_TOKEN | Protected GitHub credential with read-only contents access to akiba-db |
 
-Replace the old Build Command completely. Copy the reviewed revision from the GitHub **repository
-variable** `AKIBA_DB_SOURCE_REVISION` into Render; these settings do not synchronize automatically.
-Never use a branch name as the revision. Store the token as a Render secret, never in source or URLs.
+Set the Build Command above. Render and GitHub Actions read the same reviewed DB commit from
+`akiba-db-revision.txt` in the API checkout. Keep `DB_REPOSITORY_READ_TOKEN` as a build secret with
+read-only access to `akiba-db`. Remove the legacy `AKIBA_DB_SOURCE_REVISION` settings from GitHub
+Actions and Render after both are building from an API commit that includes the revision file.
 The helper passes it only to Git through temporary process configuration, suppresses Git diagnostics,
 and does not persist it in the fetched repository. Dependency subprocesses receive a small environment
 allowlist without application credentials, inherited Node hooks or npm credential configuration.
@@ -293,8 +293,8 @@ No live role audit was executed. Database-enforced isolation remains BLOCKED und
 managed-owner policy; BYPASSRLS is not constrained by FORCE RLS. A production alternative requires a
 separately approved least-privilege runtime identity and reviewed policies, not automatically created
 roles. In api/db, the human may run npm run security:tenant:audit for read-only development evidence.
-The API CI repository variable AKIBA_DB_SOURCE_REVISION must contain the reviewed DB commit before
-release. CI validates the full commit hash before checkout and never falls back to a branch.
+The API checkout must contain the reviewed full DB commit hash in `akiba-db-revision.txt`. CI and
+Render validate the file before fetching `akiba-db`.
 
 ## Step 5 session foundation
 
@@ -407,14 +407,15 @@ production isolation blocker described above; these internal foundations do not 
 
 Generate/build the updated sibling DB client before checking this API. Review and deploy the forward
 identity_credential_foundation migration through the DB workflow before running changed authentication
-paths. After committing/reviewing the DB changes, configure CI with that immutable commit:
+paths. After reviewing the merged DB changes, update the pin in an API PR. From the API repository
+root, with the sibling DB checkout at the reviewed commit:
 
 ```bash
-gh variable set AKIBA_DB_SOURCE_REVISION --repo nexcoderw/akiba-api --body "$(git -C ../db rev-parse HEAD)"
+git -C ../db rev-parse HEAD > akiba-db-revision.txt
 ```
 
-This is a human-operated configuration command, not an agent action or publication step. The local
-file dependency remains supported; no package version or lockfile was fabricated.
+API CI checks the candidate pin and builds the matching sibling package. Use the same pin when
+staging a server release. Production migrations follow the separate reviewed DB workflow.
 
 ## Platform authentication
 
@@ -842,7 +843,7 @@ can replace these controls or the missing code.
 
 Before reconsidering GO, the operator must:
 
-1. Record reviewed release SHAs after fixes and pin API CI AKIBA_DB_SOURCE_REVISION to that DB SHA.
+1. Record reviewed release SHAs after fixes and commit the DB SHA to `akiba-db-revision.txt`.
 2. Complete missing authentication/recovery/role workflows without weakening existing gates.
 3. Provision independent peppers/TOTP/invitation keys, real dummy Argon2 hash and reviewed password
    corpus through secret management. Validate exact origins, HTTPS cookies and trusted proxy CIDRs;

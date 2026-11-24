@@ -19,22 +19,26 @@ jobs:
     name: Verify API
     runs-on: ubuntu-24.04
     timeout-minutes: 40
-    env:
-      DB_SOURCE_REVISION: ${{ vars.AKIBA_DB_SOURCE_REVISION }}
     steps:
-      - name: Require a reviewed immutable database revision
+      - name: Check out API
+        uses: actions/checkout@v4
+        with:
+          path: api
+          persist-credentials: false
+
+      - name: Read the reviewed database revision
+        id: database-revision
+        working-directory: api
         shell: bash
         run: |
-          if [[ ! "$DB_SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "Set AKIBA_DB_SOURCE_REVISION to the reviewed database commit containing the identity foundation."
-            exit 1
-          fi
+          revision="$(node scripts/db-revision.mjs)"
+          printf 'sha=%s\n' "$revision" >> "$GITHUB_OUTPUT"
 
       - name: Check out database package
         uses: actions/checkout@v4
         with:
           repository: nexcoderw/akiba-db
-          ref: ${{ env.DB_SOURCE_REVISION }}
+          ref: ${{ steps.database-revision.outputs.sha }}
           token: ${{ secrets.DB_REPOSITORY_READ_TOKEN }}
           path: db
           persist-credentials: false
@@ -43,15 +47,9 @@ jobs:
         shell: bash
         run: |
           if [[ ! -f db/prisma/migrations/20261119080000_platform_owner_enrollment/migration.sql ]]; then
-            echo "::error title=Incompatible Akiba database revision::AKIBA_DB_SOURCE_REVISION ($DB_SOURCE_REVISION) must point to a reviewed akiba-db commit containing the platform owner enrollment migration."
+            echo "::error title=Incompatible Akiba database revision::akiba-db-revision.txt must point to a reviewed akiba-db commit containing the platform owner enrollment migration."
             exit 1
           fi
-
-      - name: Check out API
-        uses: actions/checkout@v4
-        with:
-          path: api
-          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
