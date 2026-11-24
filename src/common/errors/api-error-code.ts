@@ -24,7 +24,7 @@ const core = {
 	PASSWORD_POLICY_VIOLATION: {
 		status: 400,
 		title: 'Choose a stronger password',
-		detail: 'Use at least 15 characters and avoid common or compromised passwords.',
+		detail: 'Meet the password length requirements and avoid common or compromised passwords.',
 	},
 	PASSWORD_POLICY_UNAVAILABLE: {
 		status: 503,
