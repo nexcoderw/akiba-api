@@ -32,6 +32,32 @@ describe('ResendEmailService', () => {
 			redirect: 'error',
 			headers: { 'Idempotency-Key': 'platform-otp/fictional-delivery-id' },
 		});
+		const payload = fetchMock.mock.calls[0]?.[1]?.body;
+		expect(typeof payload).toBe('string');
+		const body: unknown = typeof payload === 'string' ? JSON.parse(payload) : null;
+		expect(body).toMatchObject({
+			to: ['admin@example.com'],
+			subject: 'Your Akiba admin email code',
+		});
+		if (
+			typeof body !== 'object' ||
+			body === null ||
+			!('html' in body) ||
+			typeof body.html !== 'string' ||
+			!('text' in body) ||
+			typeof body.text !== 'string'
+		)
+			throw new Error('Missing HTML or plain-text verification email.');
+		expect(body.html).toContain('>012345</td>');
+		expect(body.html).toContain('Outfit');
+		expect(body.html).toContain('#3E0F8D');
+		expect(body.text).toContain('\n\n012345\n\n');
+	});
+	it('does not send malformed codes or interpolate them into HTML', async () => {
+		await expect(
+			service.sendOtp('admin@example.com', '<b>012345</b>', 'delivery-id'),
+		).rejects.toMatchObject({ status: 503 });
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 	it('keeps the owner setup proof out of the URL and provider idempotency key', async () => {
 		fetchMock.mockResolvedValueOnce(Response.json({ id: '2f5298af-cf42-4e66-8968-a42be74cb34b' }));

@@ -286,7 +286,7 @@ describe('PlatformMfaService', () => {
 				},
 				new Date('2030-01-01T00:00:00.000Z'),
 			),
-		).resolves.toMatchObject({ status: 'mfa_recovery_required' });
+		).resolves.toMatchObject({ status: 'email_verified' });
 		expect(challengeUpdateMany).toHaveBeenCalledTimes(2);
 		expect(challengeUpdateMany).toHaveBeenCalledWith({
 			where: {
@@ -300,6 +300,12 @@ describe('PlatformMfaService', () => {
 		expect(totpUpdateMany).not.toHaveBeenCalled();
 		expect(recoveryUpdateMany).not.toHaveBeenCalled();
 		expect(sessionCreate).toHaveBeenCalledTimes(1);
+		expect(sessionCreate.mock.calls[0]?.[0]).toMatchObject({
+			data: {
+				authenticationMethod: 'email_otp',
+				expiresAt: new Date('2030-01-01T00:05:00.000Z'),
+			},
+		});
 	});
 
 	it.each([

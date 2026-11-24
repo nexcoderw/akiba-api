@@ -135,7 +135,6 @@ describe('platform authentication HTTP API (e2e)', () => {
 			.set('Origin', ADMIN_ORIGIN)
 			.set('Cookie', pendingCookies)
 			.set('X-Platform-CSRF-Token', CSRF_TOKEN)
-			.send({})
 			.expect(200);
 		expect(response.headers['set-cookie']).toBeUndefined();
 		const body: unknown = response.body;
@@ -144,6 +143,25 @@ describe('platform authentication HTTP API (e2e)', () => {
 			expiresAt: '2030-01-01T00:05:00.000Z',
 			retryAfterSeconds: 60,
 		});
+	});
+
+	it('reports email verification separately from full sign-in and saved recovery', async () => {
+		const expiresAt = '2030-01-01T00:05:00.000Z';
+		verifyMfa.mockResolvedValueOnce({
+			status: 'email_verified',
+			expiresAt,
+			expiresAtDate: new Date(expiresAt),
+			sessionToken: SESSION_TOKEN,
+		});
+		const response = await request(requireApplication(application).getHttpServer())
+			.post('/api/v1/platform/auth/mfa/verify')
+			.set('Origin', ADMIN_ORIGIN)
+			.set('Cookie', pendingCookies)
+			.set('X-Platform-CSRF-Token', CSRF_TOKEN)
+			.send({ method: 'email_otp', emailOtpCode: '012345' })
+			.expect(200);
+		const body: unknown = response.body;
+		expect(body).toMatchObject({ status: 'email_verified', expiresAt });
 	});
 
 	it.each([{ Origin: 'http://localhost:4000' }, { Origin: 'https://foreign.example' }])(

@@ -109,6 +109,14 @@ export class PlatformEmailOtpService {
 				OR: [{ emailOtpSentAt: null }, { emailOtpSentAt: { lte: cooldownBefore } }],
 				platformStaff: {
 					status: PlatformStaffStatus.ACTIVE,
+					// A new password challenge must not reset the staff member’s send cooldown.
+					mfaChallenges: {
+						none: {
+							purpose: 'login',
+							expiresAt: { gt: cooldownBefore },
+							emailOtpSentAt: { gt: cooldownBefore },
+						},
+					},
 					roles: {
 						some: {
 							platformRole: {

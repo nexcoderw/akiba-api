@@ -118,6 +118,25 @@ describe('PlatformEmailOtpService', () => {
 		});
 		expect(sendOtp).not.toHaveBeenCalled();
 	});
+	it('applies the send cooldown to earlier challenges for the same staff member', async () => {
+		updateMany.mockResolvedValueOnce({ count: 0 });
+		await expect(service.send('fictional-challenge-token', now)).rejects.toMatchObject({
+			status: 429,
+		});
+		expect(updateMany.mock.calls[0]?.[0]).toMatchObject({
+			where: {
+				platformStaff: {
+					mfaChallenges: {
+						none: {
+							purpose: 'login',
+							emailOtpSentAt: { gt: new Date('2029-12-31T23:59:00.000Z') },
+						},
+					},
+				},
+			},
+		});
+		expect(sendOtp).not.toHaveBeenCalled();
+	});
 	it('invalidates a failed delivery without refunding its abuse quota', async () => {
 		sendOtp.mockRejectedValueOnce(new Error('fictional provider failure'));
 		await expect(service.send('fictional-challenge-token', now)).rejects.toThrow(

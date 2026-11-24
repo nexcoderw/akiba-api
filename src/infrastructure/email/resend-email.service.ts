@@ -2,6 +2,7 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { EnvironmentVariables } from '../../config/environment.types.js';
+import { platformEmailOtpTemplate } from './platform-email-otp.template.js';
 
 /** Narrow transactional adapter. Never return or log provider payloads, recipients or codes. */
 @Injectable()
@@ -20,12 +21,9 @@ export class ResendEmailService {
 	}
 
 	async sendOtp(recipient: string, code: string, deliveryId: string): Promise<void> {
-		await this.send(
-			recipient,
-			'Your Akiba verification code',
-			`Your sign-in code is ${code}. It expires within five minutes. Use only the newest code. Do not share it. If you did not request this, ignore this email.`,
-			`platform-otp/${deliveryId}`,
-		);
+		if (!/^\d{6}$/u.test(code)) throw unavailable();
+		const { subject, text, html } = platformEmailOtpTemplate(code);
+		await this.send(recipient, subject, text, `platform-otp/${deliveryId}`, html);
 	}
 
 	async sendSecurityNotification(
@@ -56,6 +54,7 @@ export class ResendEmailService {
 		subject: string,
 		text: string,
 		idempotencyKey: string,
+		html?: string,
 	): Promise<string> {
 		const key = this.config.get('RESEND_API_KEY', { infer: true });
 		const from = this.config.get('RESEND_FROM_EMAIL', { infer: true });
@@ -75,6 +74,7 @@ export class ResendEmailService {
 					to: [recipient],
 					subject,
 					text,
+					...(html === undefined ? {} : { html }),
 				}),
 			});
 			if (
