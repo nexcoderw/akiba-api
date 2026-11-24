@@ -492,10 +492,18 @@ the existing keyring; this step adds no KMS integration or automatic key rotatio
 Full platform access now requires a session explicitly issued through active TOTP. Recovery-code
 login consumes one code and returns `mfa_recovery_required` with a maximum five-minute repair session.
 It cannot reach `/me`, dashboard, organization administration or ordinary session-management methods.
-Opt-in email OTP also returns restricted state and grants neither full platform access nor MFA
-management; use TOTP or a saved recovery code to continue. Mailbox verification cannot replace the
-privileged account's required factor. Legacy sessions are rejected, and the migration revokes them.
+Opt-in email OTP returns `email_verified` with a five-minute restricted session. Workspace access
+requires TOTP, and authenticator repair requires a trusted recovery proof. Legacy sessions are
+rejected, and the migration revokes them.
 Frontends must inspect the returned status rather than treating every HTTP 200 as platform access.
+
+For a development email round trip, set `PLATFORM_AUTH_EMAIL_OTP_ENABLED=true` in the API's local
+configuration and supply `RESEND_API_KEY` and `RESEND_FROM_EMAIL` on a verified Resend sender domain.
+Leave the default off until delivery and authorization checks pass. The send endpoint accepts an
+empty POST with the pending challenge cookie and CSRF proof. It sends the branded HTML and plain-text
+message to the verified account mailbox. A challenge allows three sends, with a 60-second account
+cooldown that also covers replacement challenges. A successful resend supersedes the previous code.
+Production still requires the configured single-instance authentication topology.
 
 All management endpoints require the exact admin Origin, approved Host, platform session cookie,
 `x-platform-csrf-token` and existing real rate limiter, including the metadata GET. They never accept
