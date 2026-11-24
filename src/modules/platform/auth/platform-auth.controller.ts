@@ -125,7 +125,7 @@ export class PlatformAuthController {
 	@ApiOperation({
 		summary: 'Send an email verification code',
 		description:
-			'Requires the HttpOnly pending-challenge cookie and CSRF proof. No request body is needed. Opt-in fallback delivered only to the verified account mailbox; never accepts a recipient or bearer challenge. Three sends per challenge, sixty-second cooldown, expiry at most five minutes. No session is issued.',
+			'Requires the HttpOnly pending-challenge cookie and CSRF proof. No request body is needed. Opt-in fallback delivered only to the verified account mailbox; never accepts a recipient or bearer challenge. Three sends per challenge, sixty-second cooldown across challenges for the account, expiry at most five minutes. No session is issued.',
 	})
 	@ApiOkResponse({ type: PlatformEmailOtpSentResponseDto })
 	@ApiBadRequestResponse({ type: ApiErrorResponseDto, description: 'Invalid challenge input.' })
@@ -176,7 +176,7 @@ export class PlatformAuthController {
 	})
 	@ApiOkResponse({
 		description:
-			'A full TOTP session or restricted recovery state was issued. Check status before navigation.',
+			'Authenticated TOTP, restricted recovery, or mailbox verification. Only authenticated TOTP permits workspace navigation.',
 		type: PlatformMfaVerifiedResponseDto,
 	})
 	@ApiBadRequestResponse({ description: 'The request DTO is invalid.', type: ApiErrorResponseDto })
