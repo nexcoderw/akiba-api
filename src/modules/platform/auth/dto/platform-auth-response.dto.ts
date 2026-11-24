@@ -29,8 +29,11 @@ export class PlatformEmailOtpSentResponseDto {
 }
 
 export class PlatformMfaVerifiedResponseDto {
-	@ApiProperty({ example: 'authenticated', enum: ['authenticated', 'mfa_recovery_required'] })
-	status!: 'authenticated' | 'mfa_recovery_required';
+	@ApiProperty({
+		example: 'authenticated',
+		enum: ['authenticated', 'mfa_recovery_required', 'email_verified'],
+	})
+	status!: 'authenticated' | 'mfa_recovery_required' | 'email_verified';
 
 	@ApiProperty({ example: '2026-10-13T18:00:00.000Z' })
 	expiresAt!: string;
