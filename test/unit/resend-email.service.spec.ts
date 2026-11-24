@@ -38,11 +38,20 @@ describe('ResendEmailService', () => {
 		expect(body).toMatchObject({
 			to: ['admin@example.com'],
 			subject: 'Your Akiba admin email code',
-			html: expect.stringContaining('>012345</td>'),
-			text: expect.stringContaining('\n\n012345\n\n'),
 		});
-		expect(body).toMatchObject({ html: expect.stringContaining('Outfit') });
-		expect(body).toMatchObject({ html: expect.stringContaining('#3E0F8D') });
+		if (
+			typeof body !== 'object' ||
+			body === null ||
+			!('html' in body) ||
+			typeof body.html !== 'string' ||
+			!('text' in body) ||
+			typeof body.text !== 'string'
+		)
+			throw new Error('Missing HTML or plain-text verification email.');
+		expect(body.html).toContain('>012345</td>');
+		expect(body.html).toContain('Outfit');
+		expect(body.html).toContain('#3E0F8D');
+		expect(body.text).toContain('\n\n012345\n\n');
 	});
 	it('does not send malformed codes or interpolate them into HTML', async () => {
 		await expect(
