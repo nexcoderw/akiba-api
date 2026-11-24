@@ -1,6 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsInt, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 
+import {
+	MAXIMUM_PASSWORD_BYTES,
+	MAXIMUM_PASSWORD_CHARACTERS,
+	MINIMUM_MFA_PASSWORD_CHARACTERS,
+} from '../../../../common/identity/password-policy.js';
+
 export class PlatformOwnerExchangeDto {
 	@ApiProperty({
 		description: 'Single-use setup code received by email; never put it in a URL.',
@@ -14,13 +20,13 @@ export class PlatformOwnerExchangeDto {
 
 export class PlatformOwnerPasswordDto {
 	@ApiProperty({
-		description: 'Unique NFC passphrase, 15–1024 characters and at most 4096 UTF-8 bytes.',
-		minLength: 15,
-		maxLength: 4096,
+		description: `Unique passphrase with ${MINIMUM_MFA_PASSWORD_CHARACTERS}–${MAXIMUM_PASSWORD_CHARACTERS} Unicode code points after NFC normalization and at most ${MAXIMUM_PASSWORD_BYTES} UTF-8 bytes.`,
+		minLength: MINIMUM_MFA_PASSWORD_CHARACTERS,
+		maxLength: MAXIMUM_PASSWORD_BYTES,
 		writeOnly: true,
 	})
 	@IsString()
-	@MaxLength(4096)
+	@MaxLength(MAXIMUM_PASSWORD_BYTES)
 	password!: string;
 }
 
