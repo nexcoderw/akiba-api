@@ -2,11 +2,12 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import { readDatabaseRevision } from '../../scripts/db-revision.mjs';
 import {
 	buildEnvironment,
 	linkRuntimePeers,
 	prepareArtifact,
-	reviewedRevision,
 } from '../../scripts/render-build.mjs';
 
 describe('Render build isolation', () => {
@@ -17,14 +18,23 @@ describe('Render build isolation', () => {
 	afterEach(() => {
 		rmSync(configurationDirectory, { recursive: true, force: true });
 	});
-	it.each(['main', 'latest', '', undefined, 'a'.repeat(39), 'A'.repeat(40)])(
+	it.each(['main', 'latest', '', 'a'.repeat(39), 'A'.repeat(40), `${'a'.repeat(40)}\n\n`])(
 		'rejects mutable or malformed database revision %p',
 		(value) => {
-			expect(() => reviewedRevision(value)).toThrow();
+			const file = join(configurationDirectory, 'akiba-db-revision.txt');
+			writeFileSync(file, value);
+			expect(() => readDatabaseRevision(file)).toThrow('must contain one reviewed');
 		},
 	);
-	it('accepts an immutable source revision', () => {
-		expect(reviewedRevision('a'.repeat(40))).toBe('a'.repeat(40));
+	it('fails when the revision file is missing', () => {
+		const file = join(configurationDirectory, 'akiba-db-revision.txt');
+		expect(() => readDatabaseRevision(file)).toThrow('Could not read the tracked');
+	});
+	it.each(['', '\n', '\r\n'])('reads a full revision with line ending %p', (lineEnding) => {
+		const file = join(configurationDirectory, 'akiba-db-revision.txt');
+		const revision = 'a'.repeat(40);
+		writeFileSync(file, revision + lineEnding);
+		expect(readDatabaseRevision(file)).toBe(revision);
 	});
 	it('does not pass application, Git, npm or tracing secrets to dependency scripts', () => {
 		const env = buildEnvironment(
