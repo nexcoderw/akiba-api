@@ -300,11 +300,11 @@ describe('PlatformMfaService', () => {
 		expect(totpUpdateMany).not.toHaveBeenCalled();
 		expect(recoveryUpdateMany).not.toHaveBeenCalled();
 		expect(sessionCreate).toHaveBeenCalledTimes(1);
-		expect(sessionCreate).toHaveBeenCalledWith({
-			data: expect.objectContaining({
+		expect(sessionCreate.mock.calls[0]?.[0]).toMatchObject({
+			data: {
 				authenticationMethod: 'email_otp',
 				expiresAt: new Date('2030-01-01T00:05:00.000Z'),
-			}),
+			},
 		});
 	});
 
