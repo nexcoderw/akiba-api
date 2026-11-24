@@ -39,6 +39,14 @@ jobs:
           path: db
           persist-credentials: false
 
+      - name: Verify database supports platform owner enrollment
+        shell: bash
+        run: |
+          if [[ ! -f db/prisma/migrations/20261119080000_platform_owner_enrollment/migration.sql ]]; then
+            echo "::error title=Incompatible Akiba database revision::AKIBA_DB_SOURCE_REVISION ($DB_SOURCE_REVISION) must point to a reviewed akiba-db commit containing the platform owner enrollment migration."
+            exit 1
+          fi
+
       - name: Check out API
         uses: actions/checkout@v4
         with:
