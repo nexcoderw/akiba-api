@@ -70,8 +70,8 @@ records provider acceptance. Acceptance does not prove delivery. After the cap, 
 review; do not manually clear counters or revive legacy activation.
 
 The email contains the fixed `/enroll/platform-owner` page link and a separate one-use 256-bit code,
-never a proof in a URL. On that existing admin screen, exchange the code, create a 15-character-minimum
-password under the canonical NFC/blocklist/Argon2id policy, explicitly generate the authenticator key,
+never a proof in a URL. On the admin screen, exchange the code, create a password of at least eight
+characters under the canonical NFC/blocklist/Argon2id policy, explicitly generate the authenticator key,
 and confirm its current six-digit TOTP. Setup expires 15 minutes after email issuance, permits at most
 three key generations and five total TOTP failures. New keys supersede earlier versions without
 resetting the attempt counter. Cancellation/expiry requires a new operator-issued email.
@@ -364,7 +364,9 @@ stale proofs. Email changes require proof for the new mailbox, revoke existing a
 and retain the stable user ID. SQL clears stale verification and advances identity version on direct
 email changes. Email delivery and public verification/account-management endpoints are not added.
 
-New passwords require 15–1024 Unicode code points after NFC, with at most 4096 submitted UTF-8 bytes.
+New passwords generally require 15–1024 Unicode code points after NFC. First-owner enrollment accepts
+eight or more because it requires authenticator verification before account activation. Both paths
+allow at most 4096 submitted UTF-8 bytes.
 Passphrases, spaces and Unicode are supported; passwords are never trimmed or truncated. Controls and
 unpaired surrogates are rejected for creation. There are no composition rules or periodic expiry.
 Legacy login inputs may be shorter: creation policy must not silently lock out existing credentials.

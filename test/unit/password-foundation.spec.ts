@@ -22,6 +22,21 @@ function hashing(): PasswordHashingService {
 }
 
 describe('password credential foundation', () => {
+	it('accepts eight characters for MFA enrollment and rejects short or common values', async () => {
+		const service = hashing();
+		const secret = 'J7m!v4Qx';
+		const hash = await service.hashForMfaEnrollment(Buffer.from(secret));
+		await expect(service.verify(hash, secret, 'nfc')).resolves.toBe(true);
+		for (const rejected of [secret.slice(0, 7), 'password', '        ']) {
+			await expect(service.hashForMfaEnrollment(Buffer.from(rejected))).rejects.toMatchObject({
+				publicCode: 'PASSWORD_POLICY_VIOLATION',
+			});
+		}
+		await expect(service.hash(Buffer.from(secret))).rejects.toMatchObject({
+			publicCode: 'PASSWORD_POLICY_VIOLATION',
+		});
+	});
+
 	it('uses unique salts and the current strong PHC configuration', async () => {
 		const service = hashing();
 		const secret = Buffer.from('Nyungwe lanterns cross quiet rivers');

@@ -2,10 +2,16 @@ import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 
 import { ApiProblemException } from '../errors/api-problem.exception.js';
+import { MAXIMUM_PASSWORD_CHARACTERS, MINIMUM_MFA_PASSWORD_CHARACTERS } from './password-policy.js';
 
 const MAXIMUM_DATASET_BYTES = 16 * 1024 * 1024;
 const MINIMUM_PRODUCTION_ENTRIES = 10_000;
 const COMMON_VALUES = new Set([
+	'password',
+	'password1',
+	'12345678',
+	'123456789',
+	'qwertyuiop',
 	'passwordpassword',
 	'passwordpasswordpassword',
 	'password123456789',
@@ -20,7 +26,10 @@ const COMMON_VALUES = new Set([
 	'iloveyouiloveyou',
 	'welcome123456789',
 	'akibaakibaakiba',
-	...Array.from({ length: 1010 }, (_, index) => ' '.repeat(index + 15)),
+	...Array.from(
+		{ length: MAXIMUM_PASSWORD_CHARACTERS - MINIMUM_MFA_PASSWORD_CHARACTERS + 1 },
+		(_, index) => ' '.repeat(index + MINIMUM_MFA_PASSWORD_CHARACTERS),
+	),
 ]);
 
 /** Offline whole-secret comparisons. Production creation fails closed without a reviewed corpus.
