@@ -20,7 +20,7 @@ export class PlatformOwnerExchangeDto {
 
 export class PlatformOwnerPasswordDto {
 	@ApiProperty({
-		description: `Unique passphrase with ${MINIMUM_MFA_PASSWORD_CHARACTERS}–${MAXIMUM_PASSWORD_CHARACTERS} Unicode code points after NFC normalization and at most ${MAXIMUM_PASSWORD_BYTES} UTF-8 bytes.`,
+		description: `Unique passphrase with ${String(MINIMUM_MFA_PASSWORD_CHARACTERS)}–${String(MAXIMUM_PASSWORD_CHARACTERS)} Unicode code points after NFC normalization and at most ${String(MAXIMUM_PASSWORD_BYTES)} UTF-8 bytes.`,
 		minLength: MINIMUM_MFA_PASSWORD_CHARACTERS,
 		maxLength: MAXIMUM_PASSWORD_BYTES,
 		writeOnly: true,
