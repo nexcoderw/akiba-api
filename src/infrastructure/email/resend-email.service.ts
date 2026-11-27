@@ -26,6 +26,12 @@ export class ResendEmailService {
 		await this.send(recipient, subject, text, `platform-otp/${deliveryId}`, html);
 	}
 
+	async sendOrganizationOtp(recipient: string, code: string, deliveryId: string): Promise<void> {
+		if (!/^\d{6}$/u.test(code)) throw unavailable();
+		const { subject, text, html } = platformEmailOtpTemplate(code, 'organization');
+		await this.send(recipient, subject, text, `organization-otp/${deliveryId}`, html);
+	}
+
 	async sendSecurityNotification(
 		recipient: string,
 		event: string,
