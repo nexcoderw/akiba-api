@@ -176,8 +176,7 @@ export class OwnerEmailOtpService {
 				},
 			});
 			if (
-				!challenge ||
-				!challenge.sentAt ||
+				!challenge?.sentAt ||
 				challenge.expiresAt <= now ||
 				challenge.consumedAt ||
 				challenge.attempts >= attemptLimit ||
