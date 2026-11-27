@@ -14,6 +14,9 @@ export class OwnerEnrollmentChallengeResponseDto {
 	@ApiProperty({ example: 'Kigali Strength Club' })
 	organizationName!: string;
 
+	@ApiProperty({ example: 'Aline Uwase' })
+	invitedDisplayName!: string;
+
 	@ApiProperty({ enum: OrganizationStatus })
 	organizationStatus!: OrganizationStatus;
 }
