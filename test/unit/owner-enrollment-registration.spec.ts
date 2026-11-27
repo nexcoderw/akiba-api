@@ -13,7 +13,9 @@ it('registers with the saved invitation name and the MFA password minimum', asyn
 	const now = new Date('2026-11-27T12:00:00Z');
 	const expiresAt = new Date('2026-11-27T12:10:00Z');
 	const user = { id: 'test-owner', identityVersion: 1 };
-	const create = jest.fn(() => Promise.resolve(user));
+	const create = jest.fn<(input: { data: { displayName: string } }) => Promise<typeof user>>(() =>
+		Promise.resolve(user),
+	);
 	const hashForMfaEnrollment = jest.fn((password: Buffer) => {
 		expect(password.toString('utf8')).toBe('test-X7!');
 		return Promise.resolve('synthetic-password-hash');
@@ -71,11 +73,8 @@ it('registers with the saved invitation name and the MFA password minimum', asyn
 			),
 		).resolves.toMatchObject({ status: 'verified' });
 		expect(hashForMfaEnrollment).toHaveBeenCalledTimes(1);
-		expect(create).toHaveBeenCalledWith(
-			expect.objectContaining({
-				data: expect.objectContaining({ displayName: 'Aline Uwase' }),
-			}),
-		);
+		expect(create).toHaveBeenCalledTimes(1);
+		expect(create.mock.calls[0]?.[0].data.displayName).toBe('Aline Uwase');
 	} finally {
 		await module.close();
 	}
