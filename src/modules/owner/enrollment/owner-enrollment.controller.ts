@@ -28,6 +28,8 @@ import type { Response } from 'express';
 
 import { AccessBoundary } from '../../../common/security/route-access.decorator.js';
 import { ApiErrorResponseDto } from '../../../common/dto/api-error-response.dto.js';
+import { OwnerEmailOtpChallengeDto } from '../auth/dto/owner-auth-response.dto.js';
+import { OwnerEmailOtpService } from '../auth/owner-email-otp.service.js';
 import { OWNER_AUTH_ERROR } from '../auth/owner-auth.constants.js';
 import { OwnerCookieService } from '../auth/owner-cookie.service.js';
 import { RequireOwnerCsrf } from '../auth/owner-csrf.decorator.js';
@@ -57,6 +59,7 @@ export class OwnerEnrollmentController {
 		private readonly acceptance: OwnerAcceptanceService,
 		private readonly cookies: OwnerCookieService,
 		private readonly tokens: OwnerTokenService,
+		private readonly otp: OwnerEmailOtpService,
 	) {}
 
 	@AccessBoundary('public')
@@ -139,6 +142,27 @@ export class OwnerEnrollmentController {
 	}
 
 	@AccessBoundary('owner-enrollment')
+	@Post('owner-enrollment/email-otp')
+	@HttpCode(HttpStatus.OK)
+	@Header('Cache-Control', 'no-store')
+	@Throttle({ default: { limit: 5, ttl: 60_000 } })
+	@UseGuards(OwnerOriginCsrfGuard, OwnerEnrollmentSessionGuard)
+	@RequireOwnerCsrf()
+	@ApiCookieAuth('owner-session')
+	@ApiOperation({ summary: 'Send an email code to the authenticated invitation recipient' })
+	@ApiOkResponse({ type: OwnerEmailOtpChallengeDto })
+	sendEmailOtp(@Req() request: OwnerRequest): Promise<OwnerEmailOtpChallengeDto> {
+		const principal = request.ownerPrincipal;
+		if (!principal?.enrollmentChallengeId)
+			throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidSession);
+		return this.otp.sendEnrollment(
+			principal,
+			request.headers.origin ?? '',
+			request.ownerOrganizationSlug,
+		);
+	}
+
+	@AccessBoundary('owner-enrollment')
 	@Post('owner-enrollment/acceptances')
 	@HttpCode(HttpStatus.OK)
 	@Header('Cache-Control', 'no-store')
@@ -149,7 +173,7 @@ export class OwnerEnrollmentController {
 	@ApiOperation({
 		summary: 'Atomically accept a verified owner invitation',
 		description:
-			'Requires an AAL2 enrollment session and persisted invitation-bound MFA verification within five minutes. Password-only enrollment returns AUTH_MFA_REQUIRED without activating membership or consuming the invitation. Organization-owner MFA verification is not yet implemented; platform MFA proofs are not accepted. After the prerequisite exists, acceptance commits membership, protected owner assignment and audit atomically.',
+			'Requires the invitation-bound enrollment session and a valid organization email code, or a prior eligible organization authenticator proof. Membership and acceptance audit commit atomically.',
 	})
 	@ApiOkResponse({ type: OwnerInvitationAcceptedResponseDto })
 	@ApiUnauthorizedResponse({ type: ApiErrorResponseDto })
@@ -164,12 +188,25 @@ export class OwnerEnrollmentController {
 	): Promise<OwnerInvitationAcceptedResponseDto> {
 		const principal = request.ownerPrincipal;
 		if (principal === undefined) throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidSession);
+		const emailProof =
+			input.emailOtpToken !== undefined &&
+			input.code !== undefined &&
+			principal.enrollmentChallengeId
+				? await this.otp.consume(
+						input.emailOtpToken,
+						input.code,
+						request.headers.origin ?? '',
+						'enrollment',
+						{ userId: principal.userId, challengeId: principal.enrollmentChallengeId },
+					)
+				: undefined;
 		const accepted = await this.acceptance.accept(
 			principal,
 			input.challengeToken,
 			request.requestId,
 			undefined,
 			request.ownerOrganizationSlug,
+			emailProof,
 		);
 		// Acceptance consumes the provisional challenge. A fresh sign-in issues a
 		// membership-bound session with a new CSRF token.
