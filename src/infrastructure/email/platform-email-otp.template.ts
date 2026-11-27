@@ -4,10 +4,14 @@ const expiration = 'This code expires within 5 minutes. Use the newest code and 
 const unexpected = 'If you didn’t request this code, you can ignore this email.';
 
 /** The caller validates the six-digit code before interpolating it into HTML. */
-export function platformEmailOtpTemplate(code: string) {
+export function platformEmailOtpTemplate(code: string, scope: 'admin' | 'organization' = 'admin') {
+	const audience = scope === 'admin' ? 'Akiba Admin' : 'Akiba Organization Portal';
+	const emailInstructions =
+		scope === 'admin' ? instructions : 'Enter this code on the Akiba Organization Portal.';
 	return {
-		subject: 'Your Akiba admin email code',
-		text: `Akiba Admin\n\n${title}\n\n${instructions}\n\n${code}\n\n${expiration}\n\n${unexpected}`,
+		subject:
+			scope === 'admin' ? 'Your Akiba admin email code' : 'Your Akiba organization email code',
+		text: `${audience}\n\n${title}\n\n${emailInstructions}\n\n${code}\n\n${expiration}\n\n${unexpected}`,
 		html: `<!doctype html>
 <html lang="en">
 <head>
@@ -15,7 +19,7 @@ export function platformEmailOtpTemplate(code: string) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <meta name="supported-color-schemes" content="light">
-  <title>${title} | Akiba Admin</title>
+  <title>${title} | ${audience}</title>
   <style>@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap');</style>
 </head>
 <body style="margin:0;padding:0;background-color:#FBFAFF;color:#241D32;">
@@ -29,7 +33,7 @@ export function platformEmailOtpTemplate(code: string) {
                 <span aria-hidden="true" style="display:inline-block;width:36px;border-radius:50%;margin-right:10px;background-color:#3E0F8D;color:#FFFFFF;text-align:center;">a</span>akiba<span style="color:#7A47C5;">.</span>
               </p>
               <h1 style="margin:0 0 12px;color:#241D32;font-size:28px;line-height:34px;font-weight:600;">${title}</h1>
-              <p style="margin:0 0 20px;color:#655B73;font-size:16px;line-height:24px;">${instructions}</p>
+              <p style="margin:0 0 20px;color:#655B73;font-size:16px;line-height:24px;">${emailInstructions}</p>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center" bgcolor="#EFE7FC" style="border:1px solid #E0D1F6;border-radius:12px;padding:16px;color:#3E0F8D;font-family:Outfit,system-ui,-apple-system,'Segoe UI',Arial,sans-serif;font-size:32px;line-height:40px;font-weight:700;letter-spacing:0.18em;">${code}</td>
