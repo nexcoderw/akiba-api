@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsString, Matches, MaxLength, MinLength, NotContains } from 'class-validator';
+import { IsString, Matches, MaxLength, MinLength, NotContains, ValidateIf } from 'class-validator';
 
 import { MAXIMUM_BOOTSTRAP_PASSWORD_BYTES } from '../../../platform/auth/platform-password-policy.js';
 
@@ -41,6 +41,24 @@ export class RegisterInvitedOwnerDto extends VerifyExistingOwnerDto {
 }
 
 export class AcceptOwnerInvitationDto {
+	@ApiProperty({ required: false, minLength: 43, maxLength: 43, writeOnly: true })
+	@ValidateIf(
+		(input: AcceptOwnerInvitationDto) =>
+			input.emailOtpToken !== undefined || input.code !== undefined,
+	)
+	@IsString()
+	@Matches(OPAQUE_TOKEN)
+	emailOtpToken?: string;
+
+	@ApiProperty({ required: false, minLength: 6, maxLength: 6, writeOnly: true })
+	@ValidateIf(
+		(input: AcceptOwnerInvitationDto) =>
+			input.emailOtpToken !== undefined || input.code !== undefined,
+	)
+	@IsString()
+	@Matches(/^\d{6}$/u)
+	code?: string;
+
 	@ApiProperty({ minLength: 43, maxLength: 43, writeOnly: true })
 	@IsString()
 	@Matches(OPAQUE_TOKEN)
