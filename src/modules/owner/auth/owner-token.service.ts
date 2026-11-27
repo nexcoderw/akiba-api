@@ -41,6 +41,12 @@ export class OwnerTokenService {
 		return this.digest(this.enrollmentPepper, 'organization-owner-enrollment-v1', token);
 	}
 
+	emailOtpDigest(token: string, code?: string): string {
+		return code === undefined
+			? this.digest(this.sessionPepper, 'organization-owner-otp-token-v1', token)
+			: this.digest(this.sessionPepper, 'organization-owner-otp-code-v1', `${token}:${code}`);
+	}
+
 	rateLimitDigest(value: string): string {
 		return this.digest(this.sessionPepper, 'organization-owner-rate-limit-v1', value);
 	}

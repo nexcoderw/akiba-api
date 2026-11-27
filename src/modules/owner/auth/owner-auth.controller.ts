@@ -30,9 +30,10 @@ import { AccessBoundary } from '../../../common/security/route-access.decorator.
 import { ApiErrorResponseDto } from '../../../common/dto/api-error-response.dto.js';
 import {
 	OwnerAuthenticatedResponseDto,
+	OwnerEmailOtpChallengeDto,
 	OwnerSessionResponseDto,
 } from './dto/owner-auth-response.dto.js';
-import { OwnerLoginDto } from './dto/owner-login.dto.js';
+import { OwnerLoginDto, VerifyOwnerEmailOtpDto } from './dto/owner-login.dto.js';
 import { OWNER_AUTH_ERROR } from './owner-auth.constants.js';
 import { OwnerCookieService } from './owner-cookie.service.js';
 import { RequireOwnerCsrf } from './owner-csrf.decorator.js';
@@ -59,27 +60,44 @@ export class OwnerAuthController {
 	@Header('Cache-Control', 'no-store')
 	@Throttle({ default: { limit: 10, ttl: 60_000 } })
 	@UseGuards(OwnerOriginCsrfGuard)
-	@ApiOperation({
-		summary: 'Sign in to the Organization Portal',
-		description:
-			'Legacy credential entry point. Operational owner sessions require verified AAL2 assurance. This password-only flow currently returns the generic credential failure and issues no session until organization MFA verification is implemented. Restricted invitation enrollment is a separate flow.',
-	})
-	@ApiOkResponse({ type: OwnerAuthenticatedResponseDto })
+	@ApiOperation({ summary: 'Verify the owner password and send an email code' })
+	@ApiOkResponse({ type: OwnerEmailOtpChallengeDto })
 	@ApiBadRequestResponse({ type: ApiErrorResponseDto })
 	@ApiUnauthorizedResponse({ type: ApiErrorResponseDto })
 	@ApiForbiddenResponse({ type: ApiErrorResponseDto })
 	@ApiTooManyRequestsResponse({ type: ApiErrorResponseDto })
 	@ApiServiceUnavailableResponse({ type: ApiErrorResponseDto })
-	async login(
+	login(
 		@Body() input: OwnerLoginDto,
 		@Req() request: OwnerRequest,
-		@Res({ passthrough: true }) response: Response,
-	): Promise<OwnerAuthenticatedResponseDto> {
-		const result = await this.loginService.login(
+	): Promise<OwnerEmailOtpChallengeDto> {
+		return this.loginService.login(
 			input,
 			request.ip ?? request.socket.remoteAddress ?? 'unavailable',
 			undefined,
 			request.ownerOrganizationSlug,
+			request.headers.origin ?? '',
+		);
+	}
+
+	@AccessBoundary('public')
+	@Post('email-otp/verify')
+	@HttpCode(HttpStatus.OK)
+	@Header('Cache-Control', 'no-store')
+	@Throttle({ default: { limit: 10, ttl: 60_000 } })
+	@UseGuards(OwnerOriginCsrfGuard)
+	@ApiOperation({ summary: 'Exchange a valid organization email code for an owner session' })
+	@ApiOkResponse({ type: OwnerAuthenticatedResponseDto })
+	@ApiUnauthorizedResponse({ type: ApiErrorResponseDto })
+	async verifyEmailOtp(
+		@Body() input: VerifyOwnerEmailOtpDto,
+		@Req() request: OwnerRequest,
+		@Res({ passthrough: true }) response: Response,
+	): Promise<OwnerAuthenticatedResponseDto> {
+		const result = await this.loginService.verifyEmailOtp(
+			input.token,
+			input.code,
+			request.headers.origin ?? '',
 		);
 		const csrfToken = this.tokens.create();
 		this.cookies.setSession(
@@ -112,7 +130,12 @@ export class OwnerAuthController {
 			userId: principal.userId,
 			displayName: principal.displayName,
 			email: principal.email,
-			assurance: principal.assurance === 'AAL2' ? 'aal2' : 'aal1',
+			assurance:
+				principal.assurance === 'PASSWORD_EMAIL_OTP'
+					? 'password_email_otp'
+					: principal.assurance === 'AAL2'
+						? 'aal2'
+						: 'aal1',
 			expiresAt: principal.expiresAt.toISOString(),
 			organizations: principal.organizations.map((organization) => ({
 				...organization,

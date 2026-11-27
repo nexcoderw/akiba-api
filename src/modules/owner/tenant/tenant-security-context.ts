@@ -8,7 +8,7 @@ export interface TenantSecurityContext {
 	readonly organizationSlug: string;
 	readonly membershipId: string;
 	readonly sessionId: string;
-	readonly assurance: 'AAL1' | 'AAL2';
+	readonly assurance: 'AAL1' | 'AAL2' | 'PASSWORD_EMAIL_OTP';
 	readonly expiresAt: number;
 	readonly requestId: string;
 	readonly resourceScope: Readonly<{ organizationId: string; branchIds: readonly string[] }>;

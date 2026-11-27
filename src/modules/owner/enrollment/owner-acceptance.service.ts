@@ -38,10 +38,17 @@ export class OwnerAcceptanceService {
 		requestId: string,
 		now = new Date(),
 		organizationSlug?: string,
+		emailProof?: {
+			id: string;
+			verifiedAt: Date;
+			identityVersion: number;
+			credentialVersion: number;
+		},
 	): Promise<OwnerInvitationAcceptedResponseDto> {
 		// Password-only provisional sessions cannot activate privileged owner membership.
 		// Platform MFA proofs belong to a separate security domain and cannot fill this gap.
-		if (principal.assurance !== 'AAL2') throw new ApiProblemException('AUTH_MFA_REQUIRED');
+		if (principal.assurance !== 'AAL2' && emailProof === undefined)
+			throw new ApiProblemException('AUTH_MFA_REQUIRED');
 		if (!this.tokens.isValid(challengeToken)) throw invalidOwnerEnrollment();
 		const challengeDigest = this.tokens.enrollmentDigest(challengeToken);
 		try {
@@ -75,7 +82,15 @@ export class OwnerAcceptanceService {
 							},
 						},
 						user: {
-							select: { id: true, email: true, status: true, emailVerifiedAt: true },
+							select: {
+								id: true,
+								email: true,
+								status: true,
+								emailVerifiedAt: true,
+								identityVersion: true,
+								passwordCredential: { select: { version: true, disabledAt: true } },
+								platformStaff: { select: { id: true } },
+							},
 						},
 					},
 				});
@@ -95,12 +110,33 @@ export class OwnerAcceptanceService {
 				) {
 					throw invalidOwnerEnrollment();
 				}
+				const stepUpAt = emailProof?.verifiedAt ?? challenge.stepUpVerifiedAt;
 				if (
-					challenge.stepUpVerifiedAt === null ||
-					challenge.stepUpVerifiedAt > now ||
-					challenge.stepUpVerifiedAt.getTime() <= now.getTime() - 300_000
+					stepUpAt === null ||
+					stepUpAt > now ||
+					stepUpAt.getTime() <= now.getTime() - 300_000 ||
+					(emailProof !== undefined &&
+						(challenge.user.identityVersion !== emailProof.identityVersion ||
+							challenge.user.passwordCredential?.version !== emailProof.credentialVersion ||
+							challenge.user.passwordCredential.disabledAt !== null ||
+							challenge.user.platformStaff !== null))
 				) {
 					throw new ApiProblemException('AUTH_MFA_REQUIRED');
+				}
+
+				if (emailProof !== undefined) {
+					const consumed = await transaction.ownerEmailOtpChallenge.findFirst({
+						where: {
+							id: emailProof.id,
+							purpose: 'enrollment',
+							organizationId: challenge.organizationId,
+							userId: principal.userId,
+							enrollmentChallengeId: challenge.id,
+							consumedAt: stepUpAt,
+						},
+						select: { id: true },
+					});
+					if (consumed === null) throw new ApiProblemException('AUTH_MFA_REQUIRED');
 				}
 				const organization = challenge.ownerInvitation.organization;
 				if (
@@ -197,6 +233,7 @@ export class OwnerAcceptanceService {
 						status: OrganizationOwnerEnrollmentStatus.CONSUMED,
 						tokenDigest: null,
 						consumedAt: now,
+						...(emailProof === undefined ? {} : { stepUpVerifiedAt: stepUpAt, verifiedAt: now }),
 						updatedAt: now,
 					},
 				});

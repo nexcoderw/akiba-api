@@ -24,6 +24,7 @@ import { OwnerSessionGuard } from '../../src/modules/owner/auth/owner-session.gu
 import { OwnerSessionService } from '../../src/modules/owner/auth/owner-session.service.js';
 import { OwnerTokenService } from '../../src/modules/owner/auth/owner-token.service.js';
 import { OwnerAcceptanceService } from '../../src/modules/owner/enrollment/owner-acceptance.service.js';
+import { OwnerEmailOtpService } from '../../src/modules/owner/auth/owner-email-otp.service.js';
 import { OwnerEnrollmentController } from '../../src/modules/owner/enrollment/owner-enrollment.controller.js';
 import { OwnerEnrollmentService } from '../../src/modules/owner/enrollment/owner-enrollment.service.js';
 import { OwnerEnrollmentSessionGuard } from '../../src/modules/owner/enrollment/owner-enrollment-session.guard.js';
@@ -78,6 +79,10 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 				},
 				{ provide: OwnerSessionService, useValue: { authenticate } },
 				{ provide: OwnerAcceptanceService, useValue: { accept } },
+				{
+					provide: OwnerEmailOtpService,
+					useValue: { consume: jest.fn(), sendEnrollment: jest.fn() },
+				},
 				{
 					provide: OwnerEnrollmentService,
 					useValue: { register: jest.fn(), start: jest.fn(), verifyExisting: jest.fn() },
@@ -145,6 +150,7 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 			response.get('X-Request-Id'),
 			undefined,
 			'kimihurura',
+			undefined,
 		);
 		expect(response.get('X-Request-Id')).toMatch(/^req_[0-9a-f-]{36}$/u);
 		expect(response.get('Set-Cookie')).toEqual(
@@ -186,6 +192,7 @@ describe('owner invitation acceptance authorization (e2e)', () => {
 			response.get('X-Request-Id'),
 			undefined,
 			'diamond-supplies',
+			undefined,
 		);
 	});
 

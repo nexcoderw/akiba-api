@@ -4,6 +4,7 @@ import { PlatformAuthModule } from '../../platform/auth/platform-auth.module.js'
 import { OrganizationRoutingService } from './organization-routing.service.js';
 import { OwnerAuthController } from './owner-auth.controller.js';
 import { OwnerCookieService } from './owner-cookie.service.js';
+import { OwnerEmailOtpService } from './owner-email-otp.service.js';
 import { OwnerLoginAttemptService } from './owner-login-attempt.service.js';
 import { OwnerLoginService } from './owner-login.service.js';
 import { OwnerOriginCsrfGuard } from './owner-origin-csrf.guard.js';
@@ -17,6 +18,7 @@ import { OwnerTokenService } from './owner-token.service.js';
 	providers: [
 		OrganizationRoutingService,
 		OwnerCookieService,
+		OwnerEmailOtpService,
 		OwnerLoginAttemptService,
 		OwnerLoginService,
 		OwnerOriginCsrfGuard,
@@ -27,6 +29,7 @@ import { OwnerTokenService } from './owner-token.service.js';
 	exports: [
 		OrganizationRoutingService,
 		OwnerCookieService,
+		OwnerEmailOtpService,
 		OwnerOriginCsrfGuard,
 		OwnerSessionGuard,
 		OwnerSessionService,

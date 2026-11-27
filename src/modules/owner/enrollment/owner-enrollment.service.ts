@@ -17,6 +17,7 @@ import {
 
 import type { EnvironmentVariables } from '../../../config/environment.types.js';
 import { PlatformPasswordService } from '../../platform/auth/platform-password.service.js';
+import { MINIMUM_MFA_PASSWORD_CHARACTERS } from '../../../common/identity/password-policy.js';
 import { acceptsBootstrapPassword } from '../../platform/auth/platform-password-policy.js';
 import { OwnerSessionService } from '../auth/owner-session.service.js';
 import { OwnerTokenService } from '../auth/owner-token.service.js';
@@ -234,8 +235,14 @@ export class OwnerEnrollmentService {
 		const password = Buffer.from(input.password, 'utf8');
 		let phase: 'password_hash' | 'identity_transaction' | 'session_creation' = 'password_hash';
 		try {
-			if (!acceptsBootstrapPassword(password, challenge.ownerInvitation.invitedEmail)) {
-				throw ownerEnrollmentConflict('Choose a stronger password of at least 15 characters.');
+			if (
+				!acceptsBootstrapPassword(
+					password,
+					challenge.ownerInvitation.invitedEmail,
+					MINIMUM_MFA_PASSWORD_CHARACTERS,
+				)
+			) {
+				throw ownerEnrollmentConflict('Choose a stronger password of at least 8 characters.');
 			}
 			const passwordHash = await this.passwords.hash(password);
 			phase = 'identity_transaction';

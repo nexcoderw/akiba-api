@@ -43,11 +43,15 @@ jobs:
           path: db
           persist-credentials: false
 
-      - name: Verify database supports platform owner enrollment
+      - name: Verify database supports platform enrollment and organization OTP
         shell: bash
         run: |
           if [[ ! -f db/prisma/migrations/20261119080000_platform_owner_enrollment/migration.sql ]]; then
             echo "::error title=Incompatible Akiba database revision::akiba-db-revision.txt must point to a reviewed akiba-db commit containing the platform owner enrollment migration."
+            exit 1
+          fi
+          if [[ ! -f db/prisma/migrations/20261127140000_organization_owner_email_otp/migration.sql ]]; then
+            echo "::error title=Incompatible Akiba database revision::akiba-db-revision.txt must point to a reviewed akiba-db commit containing the organization owner email OTP migration."
             exit 1
           fi
 

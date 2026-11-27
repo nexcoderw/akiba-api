@@ -42,12 +42,23 @@ export class OwnerSessionResponseDto {
 	@ApiProperty({ example: 'aline@example.com' })
 	email!: string;
 
-	@ApiProperty({ enum: ['aal1', 'aal2'] })
-	assurance!: 'aal1' | 'aal2';
+	@ApiProperty({ enum: ['aal1', 'aal2', 'password_email_otp'] })
+	assurance!: 'aal1' | 'aal2' | 'password_email_otp';
 
 	@ApiProperty({ format: 'date-time' })
 	expiresAt!: string;
 
 	@ApiProperty({ type: [OwnerOrganizationAccessDto] })
 	organizations!: OwnerOrganizationAccessDto[];
+}
+
+export class OwnerEmailOtpChallengeDto {
+	@ApiProperty({ enum: ['email_otp_required'] })
+	status!: 'email_otp_required';
+
+	@ApiProperty({ minLength: 43, maxLength: 43 })
+	token!: string;
+
+	@ApiProperty({ format: 'date-time' })
+	expiresAt!: string;
 }

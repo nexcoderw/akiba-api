@@ -348,6 +348,11 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
 		'PLATFORM_AUTH_EMAIL_OTP_ENABLED',
 		false,
 	);
+	const ownerEmailOtpEnabled = parseBoolean(
+		input.OWNER_AUTH_EMAIL_OTP_ENABLED,
+		'OWNER_AUTH_EMAIL_OTP_ENABLED',
+		false,
+	);
 	const organizationPortalPolicy = parseOrganizationPortalOriginPolicy(
 		input,
 		nodeEnvironment === 'production',
@@ -449,6 +454,7 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
 	// Reservation needs no sender. Explicit enrollment delivery requires a configured pair.
 	const resendRequired =
 		emailOtpEnabled ||
+		ownerEmailOtpEnabled ||
 		invitationDelivery !== null ||
 		mfaManagementEnabled ||
 		(bootstrapEnabled &&
@@ -551,6 +557,7 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
 		),
 		PLATFORM_AUTH_SINGLE_INSTANCE: singleInstance,
 		PLATFORM_AUTH_EMAIL_OTP_ENABLED: emailOtpEnabled,
+		OWNER_AUTH_EMAIL_OTP_ENABLED: ownerEmailOtpEnabled,
 		PLATFORM_MFA_MANAGEMENT_ENABLED: mfaManagementEnabled,
 		ORGANIZATION_PORTAL_ORIGIN: organizationPortalPolicy.fixedOrigin,
 		ORGANIZATION_PORTAL_BASE_DOMAIN: organizationPortalPolicy.baseDomain,

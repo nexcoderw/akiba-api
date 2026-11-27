@@ -102,7 +102,7 @@ export class OrganizationAuthorizationService {
 			credential.disabledAt !== null ||
 			credential.passwordChangedAt > session.authenticatedAt ||
 			session.assurance !== context.assurance ||
-			session.assurance !== 'AAL2' ||
+			session.assurance === 'AAL1' ||
 			session.mfaVerifiedAt === null ||
 			session.mfaVerifiedAt > now ||
 			session.mfaVerifiedAt < session.authenticatedAt

@@ -136,6 +136,11 @@ const core = {
 		title: 'Sign-in unsuccessful',
 		detail: 'The supplied authentication credentials could not be accepted.',
 	},
+	OWNER_ACCOUNT_NOT_FOUND: {
+		status: 401,
+		title: 'Organization account not found',
+		detail: 'No organization owner account exists for that email.',
+	},
 	AUTH_SESSION_EXPIRED: {
 		status: 401,
 		title: 'Sign-in required',

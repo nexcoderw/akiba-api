@@ -64,10 +64,14 @@ export class OwnerSessionService {
 		binding: OwnerSessionBinding,
 		assurance: OwnerSessionAssurance,
 		now = new Date(),
+		proof?: { id: string; identityVersion: number; credentialVersion: number; verifiedAt: Date },
 	): Promise<{ readonly token: string; readonly expiresAt: Date }> {
 		// Operational organization access fails closed until its required MFA is completed.
 		// AAL1 enrollment proofs remain restricted to the separate invitation flow.
-		if (binding.membershipId !== undefined && assurance !== OwnerSessionAssurance.AAL2)
+		if (
+			(binding.membershipId !== undefined && assurance === OwnerSessionAssurance.AAL1) ||
+			(assurance === OwnerSessionAssurance.PASSWORD_EMAIL_OTP && proof === undefined)
+		)
 			throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidSession);
 		const token = this.tokens.create();
 		const expiresAt = new Date(now.getTime() + this.sessionLifetimeMilliseconds);
@@ -80,9 +84,28 @@ export class OwnerSessionService {
 				WHERE account.id = ${userId}::uuid AND account.status = 'active'
 				AND account.email_verified_at IS NOT NULL AND credential.disabled_at IS NULL
 				AND credential.password_changed_at <= ${now}
+				AND (${proof?.identityVersion ?? null}::int IS NULL OR (
+					account.identity_version = ${proof?.identityVersion ?? null}::int
+					AND credential.version = ${proof?.credentialVersion ?? null}::int
+					AND NOT EXISTS (SELECT 1 FROM public.platform_staff WHERE user_id = account.id)
+				))
 				FOR UPDATE OF account FOR SHARE OF credential
 			`;
 				if (eligible.length !== 1) throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidSession);
+				if (proof !== undefined) {
+					const consumed = await transaction.ownerEmailOtpChallenge.findFirst({
+						where: {
+							id: proof.id,
+							userId,
+							organizationId: binding.organizationId,
+							membershipId: binding.membershipId ?? null,
+							purpose: 'login',
+							consumedAt: proof.verifiedAt,
+						},
+						select: { id: true },
+					});
+					if (consumed === null) throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidSession);
+				}
 				if (binding.membershipId !== undefined) {
 					const membership = await transaction.organizationMembership.findFirst({
 						where: {
@@ -91,7 +114,14 @@ export class OwnerSessionService {
 							userId,
 							status: OrganizationMembershipStatus.ACTIVE,
 							organization: { status: OrganizationStatus.ACTIVE },
-							roles: { some: { organizationRole: { isActive: true } } },
+							roles: {
+								some: {
+									organizationRole: {
+										isActive: true,
+										...(proof === undefined ? {} : { isSystem: true, key: 'owner' }),
+									},
+								},
+							},
 						},
 						select: { id: true },
 					});
@@ -129,7 +159,7 @@ export class OwnerSessionService {
 						tokenDigest: this.tokens.sessionDigest(token),
 						assurance,
 						authenticatedAt: now,
-						mfaVerifiedAt: assurance === OwnerSessionAssurance.AAL2 ? now : null,
+						mfaVerifiedAt: assurance === OwnerSessionAssurance.AAL1 ? null : now,
 						createdAt: now,
 						lastActivityAt: now,
 						idleExpiresAt: new Date(
@@ -401,7 +431,7 @@ export class OwnerSessionService {
 					(session.membershipId === null && session.enrollmentChallengeId === null) ||
 					(session.membershipId !== null && session.enrollmentChallengeId !== null) ||
 					(session.membershipId !== null &&
-						(session.assurance !== OwnerSessionAssurance.AAL2 ||
+						(session.assurance === OwnerSessionAssurance.AAL1 ||
 							session.mfaVerifiedAt === null ||
 							session.mfaVerifiedAt > now ||
 							session.mfaVerifiedAt < session.authenticatedAt ||

@@ -889,3 +889,24 @@ Before reconsidering GO, the operator must:
 
 Only controlled synthetic non-production development may proceed. Later inventory modules must not
 assume incomplete authentication/RBAC/recovery foundations have been delivered or certified.
+
+## Organization owner email verification
+
+`OWNER_AUTH_EMAIL_OTP_ENABLED` defaults to false. Enable it after the reviewed
+`20261127140000_organization_owner_email_otp` migration, regenerated DB package, and API deployment
+are in place. Use the existing verified Resend sender. Organization challenges and cookies are
+separate from Platform Admin authentication. The owner policy uses password plus email OTP and
+records that method as `password_email_otp`.
+
+An active owner submits their email and password to `POST /api/v1/owner/auth/login`. An email
+with no active owner membership in the selected portal receives `OWNER_ACCOUNT_NOT_FOUND`.
+A wrong password receives the credential error. Neither case sends mail. A successful password
+check sends a six-digit code via Resend and returns a short-lived opaque challenge.
+`POST /api/v1/owner/auth/email-otp/verify` consumes that challenge before issuing the session.
+
+The invitee opens a delivered link, starts enrollment, and creates or confirms a password. The
+restricted enrollment session can request its own email code and submit it with invitation
+acceptance. A code binds to the recipient, portal origin, purpose and credential versions. It
+expires within five minutes, allows at most five guesses, and can be consumed once. New codes
+replace previous ones and have a minimum one-minute resend interval per organization, account
+and purpose. First-owner acceptance and organization lifecycle activation remain separate.

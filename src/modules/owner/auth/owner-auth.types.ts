@@ -14,7 +14,7 @@ export interface OwnerPrincipal {
 	readonly userId: string;
 	readonly displayName: string;
 	readonly email: string;
-	readonly assurance: 'AAL1' | 'AAL2';
+	readonly assurance: 'AAL1' | 'AAL2' | 'PASSWORD_EMAIL_OTP';
 	readonly expiresAt: Date;
 	readonly enrollmentChallengeId?: string;
 	readonly organizations: readonly OwnerOrganizationAccess[];
