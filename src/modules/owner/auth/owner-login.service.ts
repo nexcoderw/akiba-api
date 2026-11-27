@@ -17,6 +17,7 @@ import {
 import type { OwnerAuthenticatedResponseDto } from './dto/owner-auth-response.dto.js';
 import type { OwnerLoginDto } from './dto/owner-login.dto.js';
 import { OWNER_AUTH_ERROR } from './owner-auth.constants.js';
+import { OwnerEmailOtpService } from './owner-email-otp.service.js';
 import { OwnerLoginAttemptService } from './owner-login-attempt.service.js';
 import { OwnerSessionService } from './owner-session.service.js';
 import { PlatformPasswordService } from '../../platform/auth/platform-password.service.js';
@@ -35,6 +36,7 @@ export class OwnerLoginService {
 		private readonly passwords: PlatformPasswordService,
 		private readonly attempts: OwnerLoginAttemptService,
 		private readonly sessions: OwnerSessionService,
+		private readonly otp: OwnerEmailOtpService,
 	) {}
 
 	async login(
@@ -42,7 +44,9 @@ export class OwnerLoginService {
 		ipAddress: string,
 		now = new Date(),
 		organizationSlug?: string,
-	): Promise<OwnerLoginSuccess> {
+		origin = '',
+	) {
+		this.otp.assertEnabled();
 		const email = normalizeEmailIdentity(input.email);
 		if (email === null) throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidCredentials);
 		this.attempts.consume(ipAddress, email, now.getTime());
@@ -68,9 +72,11 @@ export class OwnerLoginService {
 				),
 			) ?? [];
 		const membership = ownerMemberships.length === 1 ? ownerMemberships[0] : undefined;
+		if (identity === null || ownerMemberships.length === 0) {
+			throw new ApiProblemException('OWNER_ACCOUNT_NOT_FOUND');
+		}
 		if (
 			!passwordValid ||
-			identity === null ||
 			!accountCanAuthenticate(identity.status, identity.emailVerifiedAt) ||
 			identity.passwordCredential?.disabledAt !== null ||
 			identity.platformStaff !== null ||
@@ -80,28 +86,36 @@ export class OwnerLoginService {
 			throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidCredentials);
 		}
 
-		try {
-			const session = await this.sessions.create(
-				identity.id,
-				{ organizationId: membership.organizationId, membershipId: membership.id },
-				OwnerSessionAssurance.AAL1,
-				now,
-			);
-			this.logger.log(JSON.stringify({ event: 'owner_session_created', userId: identity.id }));
-			return {
-				status: 'authenticated',
-				expiresAt: session.expiresAt.toISOString(),
-				expiresAtDate: session.expiresAt,
-				sessionToken: session.token,
-				csrfToken: '',
-			};
-		} catch (error: unknown) {
-			if (error instanceof UnauthorizedException) {
-				throw new UnauthorizedException(OWNER_AUTH_ERROR.invalidCredentials);
-			}
-			if (error instanceof ApiProblemException) throw error;
-			throw this.persistenceFailure(error);
-		}
+		return this.otp.send(
+			{
+				userId: identity.id,
+				organizationId: membership.organizationId,
+				recipient: identity.email,
+				identityVersion: identity.identityVersion,
+				credentialVersion: identity.passwordCredential.version,
+			},
+			{ purpose: 'login', membershipId: membership.id },
+			origin,
+		);
+	}
+
+	async verifyEmailOtp(token: string, code: string, origin: string): Promise<OwnerLoginSuccess> {
+		const proof = await this.otp.consume(token, code, origin, 'login');
+		if (proof.membershipId === null) throw new ApiProblemException('AUTH_MFA_INVALID');
+		const session = await this.sessions.create(
+			proof.userId,
+			{ organizationId: proof.organizationId, membershipId: proof.membershipId },
+			OwnerSessionAssurance.PASSWORD_EMAIL_OTP,
+			new Date(),
+			proof,
+		);
+		return {
+			status: 'authenticated',
+			expiresAt: session.expiresAt.toISOString(),
+			expiresAtDate: session.expiresAt,
+			sessionToken: session.token,
+			csrfToken: '',
+		};
 	}
 
 	private readIdentity(email: string, organizationSlug?: string) {
@@ -109,10 +123,12 @@ export class OwnerLoginService {
 			where: { email },
 			select: {
 				id: true,
+				email: true,
+				identityVersion: true,
 				status: true,
 				emailVerifiedAt: true,
 				passwordCredential: {
-					select: { passwordHash: true, normalization: true, disabledAt: true },
+					select: { passwordHash: true, normalization: true, disabledAt: true, version: true },
 				},
 				platformStaff: { select: { id: true } },
 				organizationMemberships: {
