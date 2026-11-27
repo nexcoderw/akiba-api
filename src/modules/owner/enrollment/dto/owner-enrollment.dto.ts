@@ -1,6 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsString, Matches, MaxLength, MinLength, NotContains, ValidateIf } from 'class-validator';
+import {
+	IsOptional,
+	IsString,
+	Matches,
+	MaxLength,
+	MinLength,
+	NotContains,
+	ValidateIf,
+} from 'class-validator';
 
 import { MAXIMUM_BOOTSTRAP_PASSWORD_BYTES } from '../../../platform/auth/platform-password-policy.js';
 
@@ -28,7 +36,12 @@ export class VerifyExistingOwnerDto {
 }
 
 export class RegisterInvitedOwnerDto extends VerifyExistingOwnerDto {
-	@ApiProperty({ example: 'Aline Uwase', minLength: 1, maxLength: 160 })
+	@ApiProperty({
+		required: false,
+		deprecated: true,
+		description: 'Accepted for older clients. The invitation determines the account name.',
+	})
+	@IsOptional()
 	@Transform(({ value }: { value: unknown }) =>
 		typeof value === 'string' ? value.replace(TRIM_PATTERN, '') : value,
 	)
@@ -37,7 +50,7 @@ export class RegisterInvitedOwnerDto extends VerifyExistingOwnerDto {
 	@MaxLength(160)
 	@NotContains('\u0000')
 	@Matches(/[^\s\u0085]/u, { message: 'displayName must contain meaningful text' })
-	displayName!: string;
+	displayName?: string;
 }
 
 export class AcceptOwnerInvitationDto {
