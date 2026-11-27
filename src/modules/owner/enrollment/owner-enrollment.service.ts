@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { normalizeEmailIdentity } from '../../../common/identity/email-identity.js';
 import { recordIdentityEvent } from '../../identity/identity-security.js';
 import { accountCanAuthenticate } from '../../../common/identity/account-state.policy.js';
+import { ApiProblemException } from '../../../common/errors/api-problem.exception.js';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -30,11 +31,7 @@ import type {
 	OwnerEnrollmentAuthenticatedResponseDto,
 	OwnerEnrollmentChallengeResponseDto,
 } from './dto/owner-enrollment-response.dto.js';
-import {
-	invalidOwnerEnrollment,
-	ownerEnrollmentConflict,
-	ownerEnrollmentFailure,
-} from './owner-enrollment-errors.js';
+import { invalidOwnerEnrollment, ownerEnrollmentFailure } from './owner-enrollment-errors.js';
 
 const TRANSACTION_OPTIONS = Object.freeze({
 	isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -80,6 +77,7 @@ export class OwnerEnrollmentService {
 						id: true,
 						organizationId: true,
 						invitedEmail: true,
+						invitedDisplayName: true,
 						status: true,
 						expiresAt: true,
 						revokedAt: true,
@@ -144,6 +142,7 @@ export class OwnerEnrollmentService {
 					challengeToken,
 					expiresAt: expiresAt.toISOString(),
 					organizationName: invitation.organization.name,
+					invitedDisplayName: invitation.invitedDisplayName,
 					organizationStatus: invitation.organization.status,
 				};
 			}, TRANSACTION_OPTIONS);
@@ -242,15 +241,15 @@ export class OwnerEnrollmentService {
 					MINIMUM_MFA_PASSWORD_CHARACTERS,
 				)
 			) {
-				throw ownerEnrollmentConflict('Choose a stronger password of at least 8 characters.');
+				throw new ApiProblemException('PASSWORD_POLICY_VIOLATION');
 			}
-			const passwordHash = await this.passwords.hash(password);
+			const passwordHash = await this.passwords.hashForMfaEnrollment(password);
 			phase = 'identity_transaction';
 			const userId = await this.prisma.$transaction(async (transaction) => {
 				const user = await transaction.user.create({
 					data: {
 						email: invitedEmail,
-						displayName: input.displayName,
+						displayName: challenge.ownerInvitation.invitedDisplayName,
 						status: UserStatus.ACTIVE,
 						emailVerifiedAt: now,
 						passwordCredential: {
@@ -323,7 +322,11 @@ export class OwnerEnrollmentService {
 					failedAttempts: true,
 					maxAttempts: true,
 					ownerInvitation: {
-						select: { invitedEmail: true, organization: { select: { slug: true } } },
+						select: {
+							invitedEmail: true,
+							invitedDisplayName: true,
+							organization: { select: { slug: true } },
+						},
 					},
 					user: {
 						select: {
