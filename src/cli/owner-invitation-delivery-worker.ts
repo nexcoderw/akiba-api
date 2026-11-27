@@ -4,6 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { Logger, type LoggerService } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { PrismaService } from '@nexcoderw/akiba-db';
 
 import { OwnerInvitationDeliveryWorkerModule } from '../modules/platform/owner-onboarding/owner-invitation-delivery-worker.module.js';
 import { OwnerInvitationDeliveryGate } from '../modules/platform/owner-onboarding/owner-invitation-delivery.policy.js';
@@ -51,7 +52,10 @@ const operationalLogger: LoggerService = {
 };
 
 async function main(): Promise<void> {
-	const workerId = process.env.OWNER_INVITATION_WORKER_ID;
+	const args = process.argv.slice(2);
+	const checkOnly = args.length === 1 && args[0] === '--check';
+	if (args.length > 0 && !checkOnly) throw new Error('Unsupported worker arguments.');
+	const workerId = checkOnly ? 'queue-check' : process.env.OWNER_INVITATION_WORKER_ID;
 	if (workerId === undefined || !/^[A-Za-z0-9._:-]{1,120}$/u.test(workerId)) {
 		throw new Error('Missing stable worker identity.');
 	}
@@ -67,8 +71,23 @@ async function main(): Promise<void> {
 	process.once('SIGTERM', stop);
 	try {
 		const gate = application.get(OwnerInvitationDeliveryGate);
-		gate.settings();
 		await gate.assertDatabase();
+		if (checkOnly) {
+			const prisma = application.get(PrismaService);
+			const queue = await prisma.$queryRaw<
+				{ status: string; total: string; expiredQueued: string }[]
+			>`
+				SELECT status::text AS status, count(*)::text AS total,
+					count(*) FILTER (WHERE status = 'queued' AND token_expires_at <= now())::text
+						AS "expiredQueued"
+				FROM public.organization_owner_invitation_deliveries
+				GROUP BY status ORDER BY status
+			`;
+			process.stdout.write(
+				`${JSON.stringify({ code: 'OWNER_INVITATION_QUEUE_CHECKED', queue })}\n`,
+			);
+			return;
+		}
 		const worker = application.get(OwnerInvitationDeliveryWorkerService);
 		while (!shutdown.signal.aborted) {
 			await worker.runOnce(workerId);

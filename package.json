@@ -27,6 +27,7 @@
 		"bootstrap:platform-owner:activate": "node dist/cli/platform-owner-bootstrap.js activate",
 		"worker:platform-security": "node dist/cli/platform-security-notifications.js",
 		"worker:owner-invitations": "OWNER_INVITATION_WORKER_ID=local-owner-invitation-worker node --env-file=.env.local dist/cli/owner-invitation-delivery-worker.js",
+		"worker:owner-invitations:production": "NODE_ENV=production node --env-file=.env.production dist/cli/owner-invitation-delivery-worker.js",
 		"worker:owner-invitations:managed": "node dist/cli/owner-invitation-delivery-worker.js"
 	},
 	"engines": {

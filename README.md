@@ -296,6 +296,32 @@ roles. In api/db, the human may run npm run security:tenant:audit for read-only 
 The API checkout must contain the reviewed full DB commit hash in `akiba-db-revision.txt`. CI and
 Render validate the file before fetching `akiba-db`.
 
+## Organization invitation email worker
+
+Requesting delivery in Platform Admin queues the invitation. Run the standalone worker alongside
+the API to submit eligible queued invitations to Resend. On the API release with its reviewed DB
+package built, run these commands from the API checkout:
+
+```sh
+npm run worker:owner-invitations:production -- --check
+npm run worker:owner-invitations:production
+```
+
+Both commands explicitly select `.env.production`. `--check` requires the reviewed delivery flags
+and configuration, validates the database safeguards and prints counts by status and expired queued
+proofs. It exits without claiming deliveries or contacting Resend. The second command requires a
+stable `OWNER_INVITATION_WORKER_ID` and runs continuously. Start it under the deployment's service
+supervisor after approving delivery. Use the same sender, keyring, token signing key, portal domain,
+and acceptance path as the API that queued the invitation. For development use
+`NODE_ENV=development npm run worker:owner-invitations -- --check` against the development database.
+
+Verify that the recipient's HTTPS portal exists and that invitees can finish activation before
+processing a real production queue. Queue items retain the original sender, destination and proof
+expiry. Changing the environment does not rewrite existing items. An item queued with a localhost
+destination or an expired proof needs review before a new invitation is issued. Reconcile uncertain
+submissions through Resend and the invitation audit before reissuing. A confirmed submission means
+Resend accepted the email. Check Resend delivery events separately for mailbox delivery.
+
 ## Step 5 session foundation
 
 Platform and organization sessions use separate opaque 32-byte random tokens and keyed SHA-256
